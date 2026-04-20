@@ -1,0 +1,180 @@
+<h2>灵活的珠宝设计系统界面（含高清放大）</h2>
+<p class="subtitle">侧边栏导航 + 统一工作区设计 + 图片高清放大</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">主界面布局</div>
+    <div class="mockup-body" style="padding: 0;">
+      <div style="display: flex; height: 450px;">
+        
+        <!-- 左侧：导航栏 -->
+        <div style="width: 200px; background: #1e293b; padding: 20px 15px; color: white;">
+          <div style="font-weight: bold; margin-bottom: 20px; font-size: 16px;">珠宝设计系统</div>
+          
+          <div style="margin-bottom: 10px; font-size: 11px; color: #94a3b8; text-transform: uppercase;">设计流程</div>
+          
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; font-size: 13px;">
+              📝 线稿上传
+            </div>
+            <div style="padding: 10px 12px; background: #6366f1; border-radius: 6px; cursor: pointer; font-size: 13px;">
+              🖼️ 多视图生成
+            </div>
+            <div style="padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; font-size: 13px;">
+              ✨ AI编辑精修
+            </div>
+            <div style="padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; font-size: 13px;">
+              🔍 图片高清放大
+            </div>
+            <div style="padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; font-size: 13px;">
+              🎨 图像立体化
+            </div>
+            <div style="padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; font-size: 13px;">
+              📦 3D STL导出
+            </div>
+          </div>
+
+          <div style="margin: 20px 0 10px; font-size: 11px; color: #94a3b8; text-transform: uppercase;">资源管理</div>
+          
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; font-size: 13px;">
+              📁 历史记录
+            </div>
+            <div style="padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; font-size: 13px;">
+              ⭐ 收藏夹
+            </div>
+            <div style="padding: 10px 12px; background: rgba(255,255,255,0.1); border-radius: 6px; cursor: pointer; font-size: 13px;">
+              📤 导出记录
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧：高清放大工作区 -->
+        <div style="flex: 1; background: #f8fafc; padding: 20px; overflow-y: auto;">
+          
+          <!-- 顶部：当前步骤信息 -->
+          <div style="margin-bottom: 20px;">
+            <div style="font-size: 24px; font-weight: bold; color: #1e293b; margin-bottom: 5px;">图片高清放大</div>
+            <div style="color: #64748b; font-size: 14px;">使用AI技术将图片放大至更高分辨率，保持清晰度和细节</div>
+          </div>
+
+          <!-- 图片选择区域 -->
+          <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+            <div style="font-weight: bold; margin-bottom: 15px; color: #334155;">选择要放大的图片</div>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+              <button class="mock-button" style="background: #6366f1; color: white; border: none; font-size: 13px;">📚 历史生成</button>
+              <button class="mock-button" style="background: white; color: #334155; border: 1px solid #cbd5e1; font-size: 13px;">📁 历史上传</button>
+              <button class="mock-button" style="background: white; color: #334155; border: 1px solid #cbd5e1; font-size: 13px;">📤 本地上传</button>
+            </div>
+
+            <!-- 选中的图片预览 -->
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e2e8f0;">
+              <div style="display: flex; gap: 15px;">
+                <div style="width: 120px; height: 120px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 6px; border: 2px solid #6366f1;"></div>
+                <div style="flex: 1;">
+                  <div style="font-weight: bold; color: #334155; font-size: 13px;">多视图生成_正面_v2.png</div>
+                  <div style="color: #64748b; font-size: 11px; margin-top: 2px;">2026-03-26 18:45 • 原始尺寸: 1024x1024</div>
+                  <div style="margin-top: 10px; display: flex; gap: 8px;">
+                    <span style="background: #e0e7ff; color: #4338ca; padding: 3px 8px; border-radius: 10px; font-size: 10px;">多视图生成</span>
+                    <span style="background: #fef3c7; color: #b45309; padding: 3px 8px; border-radius: 10px; font-size: 10px;">正面视图</span>
+                  </div>
+                </div>
+                <button class="mock-button" style="background: #ef4444; color: white; border: none; font-size: 11px; height: fit-content; align-self: center;">移除</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 放大参数设置 -->
+          <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+            <div style="font-weight: bold; margin-bottom: 15px; color: #334155;">放大参数</div>
+            
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+              <div>
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">放大倍数</div>
+                <select class="mock-input" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  <option>2x (2048x2048)</option>
+                  <option>4x (4096x4096)</option>
+                  <option>8x (8192x8192)</option>
+                </select>
+              </div>
+              <div>
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">增强模式</div>
+                <select class="mock-input" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                  <option>通用增强</option>
+                  <option>珠宝专用</option>
+                  <option>细节强化</option>
+                  <option>降噪优先</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="margin-top: 15px;">
+              <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">增强提示词（可选）</div>
+              <textarea class="mock-input" style="width: 100%; height: 60px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; resize: none;">保持珠宝的金属光泽和宝石细节，增强纹理清晰度</textarea>
+            </div>
+
+            <div style="margin-top: 15px; padding: 12px; background: #f0fdf4; border-radius: 6px; border-left: 3px solid #22c55e;">
+              <div style="font-size: 11px; color: #15803d;">
+                <strong>💡 提示：</strong>珠宝专用模式会针对金属反光和宝石折射进行优化，适合珠宝设计图片
+              </div>
+            </div>
+          </div>
+
+          <!-- 放大按钮 -->
+          <button class="mock-button" style="background: #6366f1; color: white; border: none; padding: 12px 30px; font-size: 14px; font-weight: bold;">开始高清放大</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>高清放大功能特点</h3>
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+    <div style="background: #f0fdf4; padding: 12px; border-radius: 6px; border-left: 3px solid #22c55e;">
+      <div style="font-weight: bold; color: #15803d; font-size: 13px;">多倍放大</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">支持2x、4x、8x放大，满足不同需求</div>
+    </div>
+    <div style="background: #fef3c7; padding: 12px; border-radius: 6px; border-left: 3px solid #f59e0b;">
+      <div style="font-weight: bold; color: #b45309; font-size: 13px;">珠宝专用</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">针对珠宝特点优化的增强模式</div>
+    </div>
+    <div style="background: #fdf2f8; padding: 12px; border-radius: 6px; border-left: 3px solid #ec4899;">
+      <div style="font-weight: bold; color: #be185d; font-size: 13px;">细节保持</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">AI技术保持图片清晰度和细节</div>
+    </div>
+    <div style="background: #f0f9ff; padding: 12px; border-radius: 6px; border-left: 3px solid #0ea5e9;">
+      <div style="font-weight: bold; color: #0369a1; font-size: 13px;">灵活使用</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">可在任何步骤后使用，不受流程限制</div>
+    </div>
+    <div style="background: #f5f3ff; padding: 12px; border-radius: 6px; border-left: 3px solid #8b5cf6;">
+      <div style="font-weight: bold; color: #5b21b6; font-size: 13px;">自定义提示</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">支持自定义增强提示词</div>
+    </div>
+    <div style="background: #fff1f2; padding: 12px; border-radius: 6px; border-left: 3px solid #f43f5e;">
+      <div style="font-weight: bold; color: #9f1239; font-size: 13px;">快速预览</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">放大后可快速预览和对比</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>完整功能列表</h3>
+  <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+      <span style="background: #e0e7ff; color: #4338ca; padding: 6px 12px; border-radius: 12px; font-size: 12px;">1. 线稿上传</span>
+      <span style="background: #e0e7ff; color: #4338ca; padding: 6px 12px; border-radius: 12px; font-size: 12px;">2. 多视图生成</span>
+      <span style="background: #e0e7ff; color: #4338ca; padding: 6px 12px; border-radius: 12px; font-size: 12px;">3. AI编辑精修</span>
+      <span style="background: #fef3c7; color: #b45309; padding: 6px 12px; border-radius: 12px; font-size: 12px;">4. 图片高清放大 ⭐ 新增</span>
+      <span style="background: #e0e7ff; color: #4338ca; padding: 6px 12px; border-radius: 12px; font-size: 12px;">5. 图像立体化</span>
+      <span style="background: #e0e7ff; color: #4338ca; padding: 6px 12px; border-radius: 12px; font-size: 12px;">6. 3D STL导出</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p style="text-align: center; color: #666; font-style: italic;">
+    在终端中告诉我：高清放大功能的位置和设计如何？还需要添加其他功能吗？
+  </p>
+</div>

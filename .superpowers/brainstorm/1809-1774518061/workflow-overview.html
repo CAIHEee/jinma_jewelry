@@ -1,0 +1,81 @@
+<h2>珠宝设计系统整体流程</h2>
+<p class="subtitle">从线稿到3D STL的完整工作流</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">系统工作流程</div>
+    <div class="mockup-body" style="padding: 20px;">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+        <div class="mock-button" style="background: #6366f1; color: white; border: none;">1. 人工出线稿</div>
+        <div style="color: #999;">→</div>
+        <div class="mock-button" style="background: #8b5cf6; color: white; border: none;">2. AI出多视图</div>
+        <div style="color: #999;">→</div>
+        <div class="mock-button" style="background: #a855f7; color: white; border: none;">3. AI编辑精修</div>
+        <div style="color: #999;">→</div>
+        <div class="mock-button" style="background: #d946ef; color: white; border: none;">4. 图像立体化</div>
+        <div style="color: #999;">→</div>
+        <div class="mock-button" style="background: #ec4899; color: white; border: none;">5. 转3D STL</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-top: 30px;">
+        <div style="border: 2px dashed #ccc; padding: 15px; border-radius: 8px; text-align: center;">
+          <div style="font-weight: bold; margin-bottom: 8px;">线稿上传</div>
+          <div class="placeholder" style="height: 80px;">手绘/扫描稿</div>
+          <div style="font-size: 12px; color: #666; margin-top: 8px;">支持PNG/JPG</div>
+        </div>
+
+        <div style="border: 2px dashed #ccc; padding: 15px; border-radius: 8px; text-align: center;">
+          <div style="font-weight: bold; margin-bottom: 8px;">多视图生成</div>
+          <div class="placeholder" style="height: 80px;">正面/侧面/顶面</div>
+          <div style="font-size: 12px; color: #666; margin-top: 8px;">API调用</div>
+        </div>
+
+        <div style="border: 2px dashed #ccc; padding: 15px; border-radius: 8px; text-align: center;">
+          <div style="font-weight: bold; margin-bottom: 8px;">提示词编辑</div>
+          <div class="placeholder" style="height: 80px;">精修调整</div>
+          <div style="font-size: 12px; color: #666; margin-top: 8px;">人工干预</div>
+        </div>
+
+        <div style="border: 2px dashed #ccc; padding: 15px; border-radius: 8px; text-align: center;">
+          <div style="font-weight: bold; margin-bottom: 8px;">灰度立体化</div>
+          <div class="placeholder" style="height: 80px;">深度图生成</div>
+          <div style="font-size: 12px; color: #666; margin-top: 8px;">高度映射</div>
+        </div>
+
+        <div style="border: 2px dashed #ccc; padding: 15px; border-radius: 8px; text-align: center;">
+          <div style="font-weight: bold; margin-bottom: 8px;">STL导出</div>
+          <div class="placeholder" style="height: 80px;">3D模型</div>
+          <div style="font-size: 12px; color: #666; margin-top: 8px;">可打印格式</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>核心技术栈</h3>
+  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+    <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #0ea5e9;">
+      <div style="font-weight: bold; color: #0369a1;">前端界面</div>
+      <div style="font-size: 13px; color: #555; margin-top: 5px;">React/Vue + 图像编辑器</div>
+    </div>
+    <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; border-left: 4px solid #22c55e;">
+      <div style="font-weight: bold; color: #15803d;">后端服务</div>
+      <div style="font-size: 13px; color: #555; margin-top: 5px;">Python/FastAPI + 任务队列</div>
+    </div>
+    <div style="background: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+      <div style="font-weight: bold; color: #b45309;">AI生图API</div>
+      <div style="font-size: 13px; color: #555; margin-top: 5px;">Flux/Midjourney/Stable Diffusion</div>
+    </div>
+    <div style="background: #fdf2f8; padding: 15px; border-radius: 8px; border-left: 4px solid #ec4899;">
+      <div style="font-weight: bold; color: #be185d;">3D处理</div>
+      <div style="font-size: 13px; color: #555; margin-top: 5px;">OpenCV + NumPy + STL生成</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p style="text-align: center; color: #666; font-style: italic;">
+    在终端中告诉我：这个流程是否符合您的预期？有什么需要调整的地方？
+  </p>
+</div>

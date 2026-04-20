@@ -1,0 +1,113 @@
+{
+  "text_to_image": [
+    {
+      "model": "gemini-3.1-flash-image-preview",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 400,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "The model is overloaded. Please try again later.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "status_code": 200,
+      "response": {
+        "job_id": null,
+        "status": "completed",
+        "provider": "gemini",
+        "model": "gemini-3-pro-image-preview",
+        "image_url": "https://cdn.ttapi.io/gemini/20260416/2c089d0fbb96428b8afb79491a491c93.png",
+        "revised_prompt": null,
+        "message": "Image generation completed.",
+        "raw_response": {
+          "status": "SUCCESS",
+          "message": "success",
+          "data": {
+            "prompt": "Create a premium jewelry product image of a ruby ring with elegant metalwork, clear gemstone facets, studio lighting, and a clean luxury visual style.",
+            "refer_images": null,
+            "image_url": "https://cdn.ttapi.io/gemini/20260416/2c089d0fbb96428b8afb79491a491c93.png",
+            "quota": 6.0
+          }
+        }
+      },
+      "saved_image": "E:\\A_GS_project\\文生图需求\\flux_system\\backend\\tests\\ttapi_run_20260416_111756\\text_gemini-3-pro-image-preview.png"
+    },
+    {
+      "model": "flux1-schnell",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 400,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "\"mode\" cannot be empty.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "flux1-dev",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 400,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "\"mode\" cannot be empty.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "flux1-pro",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 400,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "\"mode\" cannot be empty.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "flux-2-pro",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 400,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "\"mode\" cannot be empty.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "flux-2-max",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 400,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "\"mode\" cannot be empty.",
+            "data": null
+          }
+        }
+      }
+    }
+  ],
+  "fusion": []
+}

@@ -1,0 +1,130 @@
+<h2>带历史记录的生图流程设计</h2>
+<p class="subtitle">支持多次迭代和图生图选择</p>
+
+<div class="section">
+  <div class="mockup">
+    <div class="mockup-header">主界面布局</div>
+    <div class="mockup-body" style="padding: 15px;">
+      <div style="display: flex; gap: 15px; height: 400px;">
+        
+        <!-- 左侧：操作面板 -->
+        <div style="flex: 1; background: #f8fafc; padding: 15px; border-radius: 8px;">
+          <div style="font-weight: bold; margin-bottom: 15px; color: #334155;">操作面板</div>
+          
+          <div style="margin-bottom: 15px;">
+            <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">当前步骤</div>
+            <div style="background: #e0e7ff; padding: 8px; border-radius: 4px; font-size: 13px; color: #4338ca;">
+              3. AI编辑精修
+            </div>
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">提示词</div>
+            <div class="mock-input" style="height: 60px; background: white; border: 1px solid #cbd5e1; padding: 8px; font-size: 12px;">
+              精细的珠宝细节，增加宝石光泽，调整金属质感...
+            </div>
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <div style="font-size: 12px; color: #64748b; margin-bottom: 5px;">参考图片</div>
+            <div style="display: flex; gap: 8px;">
+              <div style="width: 50px; height: 50px; background: #ddd; border-radius: 4px; border: 2px solid #6366f1;"></div>
+              <div style="width: 50px; height: 50px; background: #eee; border-radius: 4px; border: 1px dashed #999;"></div>
+            </div>
+          </div>
+
+          <button class="mock-button" style="background: #6366f1; color: white; border: none; width: 100%;">生成图片</button>
+        </div>
+
+        <!-- 中间：当前工作区 -->
+        <div style="flex: 2; background: #f8fafc; padding: 15px; border-radius: 8px;">
+          <div style="font-weight: bold; margin-bottom: 15px; color: #334155;">当前工作区</div>
+          <div style="background: white; height: 280px; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: 2px dashed #cbd5e1;">
+            <div style="text-align: center; color: #94a3b8;">
+              <div style="font-size: 40px; margin-bottom: 10px;">🖼️</div>
+              <div style="font-size: 13px;">当前生成的图片</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button class="mock-button" style="flex: 1; font-size: 12px;">继续编辑</button>
+            <button class="mock-button" style="flex: 1; font-size: 12px;">保存到历史</button>
+            <button class="mock-button" style="flex: 1; font-size: 12px;">下一步</button>
+          </div>
+        </div>
+
+        <!-- 右侧：历史记录 -->
+        <div style="flex: 1; background: #f8fafc; padding: 15px; border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div style="font-weight: bold; color: #334155;">历史记录</div>
+            <div style="font-size: 11px; color: #6366f1; cursor: pointer;">查看全部 →</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+            <div style="aspect-ratio: 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 6px; cursor: pointer; border: 2px solid transparent; position: relative;">
+              <div style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.7); color: white; font-size: 9px; padding: 2px 4px; border-radius: 2px;">v3</div>
+            </div>
+            <div style="aspect-ratio: 1; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 6px; cursor: pointer; border: 2px solid #6366f1; position: relative;">
+              <div style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.7); color: white; font-size: 9px; padding: 2px 4px; border-radius: 2px;">v2</div>
+            </div>
+            <div style="aspect-ratio: 1; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); border-radius: 6px; cursor: pointer; border: 2px solid transparent; position: relative;">
+              <div style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.7); color: white; font-size: 9px; padding: 2px 4px; border-radius: 2px;">v1</div>
+            </div>
+            <div style="aspect-ratio: 1; background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); border-radius: 6px; cursor: pointer; border: 2px solid transparent; position: relative;">
+              <div style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.7); color: white; font-size: 9px; padding: 2px 4px; border-radius: 2px;">v0</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 15px; padding: 10px; background: #e0e7ff; border-radius: 6px; font-size: 11px; color: #4338ca;">
+            <div style="font-weight: bold; margin-bottom: 5px;">💡 提示</div>
+            <div>点击历史图片可作为图生图的参考图</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>迭代流程设计</h3>
+  <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+    <div class="mock-button" style="background: #6366f1; color: white; border: none;">生成</div>
+    <div style="color: #999;">→</div>
+    <div class="mock-button" style="background: #8b5cf6; color: white; border: none;">不满意</div>
+    <div style="color: #999;">→</div>
+    <div class="mock-button" style="background: #a855f7; color: white; border: none;">查看历史</div>
+    <div style="color: #999;">→</div>
+    <div class="mock-button" style="background: #d946ef; color: white; border: none;">选择参考</div>
+    <div style="color: #999;">→</div>
+    <div class="mock-button" style="background: #ec4899; color: white; border: none;">图生图</div>
+    <div style="color: #999;">→</div>
+    <div class="mock-button" style="background: #f43f5e; color: white; border: none;">满意/继续</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>历史记录功能要点</h3>
+  <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+    <div style="background: #f0fdf4; padding: 12px; border-radius: 6px; border-left: 3px solid #22c55e;">
+      <div style="font-weight: bold; color: #15803d; font-size: 13px;">自动保存</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">每次生图自动保存到历史记录</div>
+    </div>
+    <div style="background: #fef3c7; padding: 12px; border-radius: 6px; border-left: 3px solid #f59e0b;">
+      <div style="font-weight: bold; color: #b45309; font-size: 13px;">版本标记</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">显示生成顺序和版本号</div>
+    </div>
+    <div style="background: #fdf2f8; padding: 12px; border-radius: 6px; border-left: 3px solid #ec4899;">
+      <div style="font-weight: bold; color: #be185d; font-size: 13px;">快速选择</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">点击即可作为参考图使用</div>
+    </div>
+    <div style="background: #f0f9ff; padding: 12px; border-radius: 6px; border-left: 3px solid #0ea5e9;">
+      <div style="font-weight: bold; color: #0369a1; font-size: 13px;">分类管理</div>
+      <div style="font-size: 11px; color: #555; margin-top: 4px;">按步骤/项目/时间筛选</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <p style="text-align: center; color: #666; font-style: italic;">
+    在终端中告诉我：这个历史记录设计如何？还有什么需要补充的功能？
+  </p>
+</div>

@@ -1,0 +1,24 @@
+{
+  "model": "gemini-3-pro-image-preview",
+  "status_code": 200,
+  "response": {
+    "job_id": null,
+    "status": "completed",
+    "provider": "gemini",
+    "model": "gemini-3-pro-image-preview",
+    "image_url": "https://cdn.ttapi.io/gemini/20260416/ab3a688902894bef87cb50119fac8e57.png",
+    "revised_prompt": null,
+    "message": "Image generation completed.",
+    "raw_response": {
+      "status": "SUCCESS",
+      "message": "success",
+      "data": {
+        "prompt": "Create a premium jewelry product image of a ruby ring with elegant metalwork, clear gemstone facets, studio lighting, and a clean luxury visual style.",
+        "refer_images": null,
+        "image_url": "https://cdn.ttapi.io/gemini/20260416/ab3a688902894bef87cb50119fac8e57.png",
+        "quota": 6.0
+      }
+    }
+  },
+  "saved_image": "E:\\A_GS_project\\文生图需求\\flux_system\\backend\\tests\\ttapi_run_20260416_111952\\text_gemini-3-pro-image-preview.png"
+}

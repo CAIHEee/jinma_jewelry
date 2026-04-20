@@ -1,0 +1,14 @@
+{
+  "model": "flux1-pro",
+  "status_code": 502,
+  "response": {
+    "detail": {
+      "upstream_status": 400,
+      "upstream_response": {
+        "status": "FAILED",
+        "message": "\"mode\" cannot be empty.",
+        "data": null
+      }
+    }
+  }
+}

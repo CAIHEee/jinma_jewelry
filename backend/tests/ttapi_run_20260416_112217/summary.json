@@ -1,0 +1,103 @@
+{
+  "text_to_image": [
+    {
+      "model": "gemini-3.1-flash-image-preview",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 402,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "Insufficient balance in TT API.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 402,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "Insufficient balance in TT API.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "flux1-schnell",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 400,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "'mode' parameter error!",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "flux1-dev",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 400,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "\"jobId\" cannot be empty.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "flux1-pro",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 402,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "Insufficient balance in TT API.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "flux-2-pro",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 400,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "\"jobId\" cannot be empty.",
+            "data": null
+          }
+        }
+      }
+    },
+    {
+      "model": "flux-2-max",
+      "status_code": 502,
+      "response": {
+        "detail": {
+          "upstream_status": 402,
+          "upstream_response": {
+            "status": "FAILED",
+            "message": "Insufficient balance in TT API.",
+            "data": null
+          }
+        }
+      }
+    }
+  ],
+  "fusion": []
+}

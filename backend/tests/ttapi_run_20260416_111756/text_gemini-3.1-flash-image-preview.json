@@ -1,0 +1,14 @@
+{
+  "model": "gemini-3.1-flash-image-preview",
+  "status_code": 502,
+  "response": {
+    "detail": {
+      "upstream_status": 400,
+      "upstream_response": {
+        "status": "FAILED",
+        "message": "The model is overloaded. Please try again later.",
+        "data": null
+      }
+    }
+  }
+}

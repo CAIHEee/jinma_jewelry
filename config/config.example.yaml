@@ -1,0 +1,107 @@
+# Jewelry Design System configuration example
+
+database:
+  host: localhost
+  port: 3306
+  name: jewelry_design
+  user: root
+  password: your_password
+  charset: utf8mb4
+
+redis:
+  host: localhost
+  port: 6379
+  db: 0
+  password: null
+
+oss:
+  provider: aliyun
+  access_key_id: your_access_key_id
+  access_key_secret: your_access_key_secret
+  bucket: your_bucket_name
+  endpoint: oss-cn-guangzhou.aliyuncs.com
+  region: oss-cn-guangzhou
+
+cos:
+  provider: tencent
+  secret_id: your_secret_id
+  secret_key: your_secret_key
+  bucket: your_bucket_name
+  region: ap-guangzhou
+
+ai:
+  flux:
+    api_key: your_flux_api_key
+    endpoint: https://api.flux.ai/v1
+    timeout: 120
+    max_retries: 3
+
+  midjourney:
+    api_key: your_midjourney_api_key
+    endpoint: https://api.midjourney.com/v1
+    timeout: 180
+    max_retries: 3
+
+  stable_diffusion:
+    api_key: your_sd_api_key
+    endpoint: https://api.stablediffusion.com/v1
+    timeout: 120
+    max_retries: 3
+
+  upscale:
+    provider: real_esrgan
+    endpoint: https://api.upscale.ai/v1
+    api_key: your_upscale_api_key
+    timeout: 300
+    max_retries: 2
+
+  depth:
+    provider: midas
+    endpoint: https://api.depth.ai/v1
+    api_key: your_depth_api_key
+    timeout: 60
+    max_retries: 2
+
+celery:
+  broker_url: redis://localhost:6379/0
+  result_backend: redis://localhost:6379/0
+  task_serializer: json
+  accept_content: json
+  timezone: Asia/Shanghai
+  worker_concurrency: 4
+
+app:
+  name: Jewelry Design System
+  version: 1.0.0
+  debug: false
+  host: 0.0.0.0
+  port: 8000
+  cors_origins:
+    - http://localhost:3000
+    - https://your-domain.com
+
+security:
+  secret_key: your_secret_key_here_change_in_production
+  algorithm: HS256
+  access_token_expire_minutes: 1440
+  refresh_token_expire_days: 30
+
+upload:
+  max_file_size: 10485760
+  allowed_extensions:
+    - png
+    - jpg
+    - jpeg
+  thumbnail_size: 256
+
+tasks:
+  max_concurrent_tasks: 10
+  task_timeout: 600
+  cleanup_interval: 3600
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: logs/app.log
+  max_bytes: 10485760
+  backup_count: 5

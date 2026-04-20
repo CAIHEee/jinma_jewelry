@@ -1,0 +1,20 @@
+{
+  "model": "flux-2-pro",
+  "status_code": 200,
+  "response": {
+    "job_id": null,
+    "status": "failed",
+    "provider": "flux",
+    "model": "flux-2-pro",
+    "image_url": null,
+    "revised_prompt": null,
+    "message": "Flux generation did not return a task id.",
+    "raw_response": {
+      "status": "SUCCESS",
+      "message": "success",
+      "data": {
+        "jobId": "d5b6d6bf-49bb-4077-b812-bb69d41ee162"
+      }
+    }
+  }
+}

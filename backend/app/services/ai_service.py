@@ -1,0 +1,1793 @@
+import asyncio
+import base64
+from datetime import datetime
+from dataclasses import dataclass
+from io import BytesIO
+from math import ceil
+from pathlib import Path
+from typing import Any
+from urllib.parse import quote, urlencode
+from uuid import uuid4
+
+import httpx
+from fastapi import HTTPException, UploadFile, status
+from starlette.datastructures import Headers
+
+from app.core.config import get_settings
+from app.schemas.ai import (
+    FeatureDefinition,
+    FusionJobAccepted,
+    FusionRequestMetadata,
+    GenerationFeatureCatalog,
+    GenerationResult,
+    ModelCatalogResponse,
+    MultiViewSplitItem,
+    MultiViewSplitRequest,
+    MultiViewSplitResponse,
+    ProviderType,
+    ReferenceImageRequestMetadata,
+    TTAPIModelDefinition,
+    TextToImageRequest,
+)
+from app.schemas.history import HistoryRecordCreate
+from app.services.asset_service import AssetService
+from app.services.history_service import HistoryService
+from app.services.storage_service import StorageService
+
+
+@dataclass(frozen=True)
+class TTAPIModelConfig:
+    id: str
+    label: str
+    provider: ProviderType
+    category: str
+    supports_text_to_image: bool
+    supports_multi_image_fusion: bool
+    supports_reference_images: bool
+    pricing_hint: str
+
+
+MODEL_CATALOG: dict[str, TTAPIModelConfig] = {
+    "gemini-3.1-flash-image-preview": TTAPIModelConfig(
+        id="gemini-3.1-flash-image-preview",
+        label="Nano Banana 2",
+        provider=ProviderType.gemini,
+        category="image_generation",
+        supports_text_to_image=True,
+        supports_multi_image_fusion=True,
+        supports_reference_images=True,
+        pricing_hint="Gemini image preview family on TTAPI",
+    ),
+    "gemini-3-pro-image-preview": TTAPIModelConfig(
+        id="gemini-3-pro-image-preview",
+        label="Nano Banana Pro",
+        provider=ProviderType.gemini,
+        category="image_generation",
+        supports_text_to_image=True,
+        supports_multi_image_fusion=True,
+        supports_reference_images=True,
+        pricing_hint="Gemini pro image preview family on TTAPI",
+    ),
+    "flux1-schnell": TTAPIModelConfig(
+        id="flux1-schnell",
+        label="Flux Schnell",
+        provider=ProviderType.flux,
+        category="image_generation",
+        supports_text_to_image=True,
+        supports_multi_image_fusion=False,
+        supports_reference_images=False,
+        pricing_hint="Fast Flux generation",
+    ),
+    "flux1-dev": TTAPIModelConfig(
+        id="flux1-dev",
+        label="Flux Dev",
+        provider=ProviderType.flux,
+        category="image_generation",
+        supports_text_to_image=True,
+        supports_multi_image_fusion=False,
+        supports_reference_images=False,
+        pricing_hint="General Flux development model",
+    ),
+    "flux1-pro": TTAPIModelConfig(
+        id="flux1-pro",
+        label="Flux Pro",
+        provider=ProviderType.flux,
+        category="image_generation",
+        supports_text_to_image=True,
+        supports_multi_image_fusion=False,
+        supports_reference_images=False,
+        pricing_hint="Higher quality Flux generation",
+    ),
+    "flux-2-pro": TTAPIModelConfig(
+        id="flux-2-pro",
+        label="Flux 2 Pro",
+        provider=ProviderType.flux,
+        category="image_generation",
+        supports_text_to_image=True,
+        supports_multi_image_fusion=False,
+        supports_reference_images=False,
+        pricing_hint="Flux 2 pro tier",
+    ),
+    "flux-2-max": TTAPIModelConfig(
+        id="flux-2-max",
+        label="Flux 2 Max",
+        provider=ProviderType.flux,
+        category="image_generation",
+        supports_text_to_image=True,
+        supports_multi_image_fusion=False,
+        supports_reference_images=False,
+        pricing_hint="Highest Flux 2 quality tier",
+    ),
+    "flux-kontext-pro": TTAPIModelConfig(
+        id="flux-kontext-pro",
+        label="Flux Kontext Pro",
+        provider=ProviderType.flux,
+        category="image_edit",
+        supports_text_to_image=False,
+        supports_multi_image_fusion=True,
+        supports_reference_images=True,
+        pricing_hint="Flux context editing model",
+    ),
+    "flux-kontext-max": TTAPIModelConfig(
+        id="flux-kontext-max",
+        label="Flux Kontext Max",
+        provider=ProviderType.flux,
+        category="image_edit",
+        supports_text_to_image=False,
+        supports_multi_image_fusion=True,
+        supports_reference_images=True,
+        pricing_hint="Highest Flux context editing tier",
+    ),
+}
+
+
+class AIService:
+    def __init__(self) -> None:
+        self.settings = get_settings()
+        self.asset_service = AssetService()
+        self.history_service = HistoryService()
+        self.storage_service = StorageService()
+        self.storage_dir = Path(__file__).resolve().parents[2] / "data"
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self.local_asset_root = self.storage_dir / "local_assets"
+        self.local_asset_root.mkdir(parents=True, exist_ok=True)
+
+    def get_feature_catalog(self) -> GenerationFeatureCatalog:
+        platform_label = self._upstream_platform_label()
+        return GenerationFeatureCatalog(
+            features=[
+                FeatureDefinition(
+                    key="text_to_image",
+                    title="Text to image",
+                    description=f"Generate jewelry design images from prompts with selectable {platform_label} models.",
+                ),
+                FeatureDefinition(
+                    key="image_edit",
+                    title="Image editing",
+                    description=f"Edit or refine existing design images through {platform_label}-backed models.",
+                ),
+                FeatureDefinition(
+                    key="multi_image_fusion",
+                    title="Multi image fusion",
+                    description="Upload two or more images and blend them into a new design concept.",
+                ),
+                FeatureDefinition(
+                    key="reference_image_transform",
+                    title="Reference image transform",
+                    description="Transform a single reference image into edits, grayscale relief, or other derived variants.",
+                ),
+                FeatureDefinition(
+                    key="multi_view",
+                    title="Multi-view image",
+                    description="Generate a single four-view composition image from one reference image.",
+                ),
+                FeatureDefinition(
+                    key="split_multi_view",
+                    title="Split multi-view image",
+                    description="Split a four-view composition image into four separate view assets with adjustable cut lines.",
+                ),
+            ]
+        )
+
+    def get_model_catalog(self) -> ModelCatalogResponse:
+        platform_label = self._upstream_platform_label()
+        return ModelCatalogResponse(
+            models=[
+                TTAPIModelDefinition(
+                    id=model.id,
+                    label=model.label,
+                    provider=model.provider,
+                    category=model.category,
+                    supports_text_to_image=model.supports_text_to_image,
+                    supports_multi_image_fusion=model.supports_multi_image_fusion,
+                    supports_reference_images=model.supports_reference_images,
+                    pricing_hint=self._build_model_pricing_hint(model, platform_label),
+                )
+                for model in MODEL_CATALOG.values()
+            ]
+        )
+
+    async def generate_text_to_image(self, request: TextToImageRequest) -> GenerationResult:
+        model = self._get_model_or_404(request.model)
+        if not model.supports_text_to_image:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Model {request.model} does not support text-to-image generation.",
+            )
+
+        if self._use_apiyi():
+            if model.provider == ProviderType.gemini:
+                return await self._generate_with_gemini_apiyi(request=request, model=model)
+            return await self._generate_with_flux_apiyi(request=request, model=model)
+
+        if model.provider == ProviderType.gemini:
+            return await self._generate_with_gemini(request=request, model=model)
+        return await self._generate_with_flux(request=request, model=model)
+
+    async def fuse_images(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: FusionRequestMetadata,
+        source_image_urls: list[str] | None = None,
+    ) -> FusionJobAccepted:
+        model = self._get_model_or_404(metadata.model)
+        if not model.supports_multi_image_fusion:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Model {metadata.model} does not support multi-image fusion.",
+            )
+
+        submit_files = files
+        if files:
+            input_assets = [
+                await self.asset_service.create_input_asset(
+                    file=file,
+                    module_kind="fusion",
+                    metadata={
+                        "feature": "fusion",
+                        "model": metadata.model,
+                        "primary_image_index": metadata.primary_image_index,
+                    },
+                )
+                for file in files
+            ]
+            metadata = metadata.model_copy(
+                update={
+                    "source_images": [
+                        {
+                            "filename": asset.name,
+                            "source_image_url": asset.preview_url,
+                            "storage_url": asset.storage_url,
+                            "preview_url": asset.preview_url,
+                        }
+                        for asset in input_assets
+                    ]
+                }
+            )
+        else:
+            normalized_urls = [item for item in (source_image_urls or []) if item]
+            submit_files = [
+                await self._build_upload_file_from_url(url, metadata.filenames[index] if index < len(metadata.filenames) else None)
+                for index, url in enumerate(normalized_urls)
+            ]
+            metadata = metadata.model_copy(
+                update={
+                    "source_images": [
+                        {
+                            "filename": metadata.filenames[index] if index < len(metadata.filenames) else f"image-{index + 1}.png",
+                            "source_image_url": url,
+                            "preview_url": url,
+                        }
+                        for index, url in enumerate(normalized_urls)
+                    ]
+                }
+            )
+
+        if self._use_apiyi():
+            if model.provider == ProviderType.gemini:
+                result = await self._fuse_with_gemini_apiyi(files=submit_files, metadata=metadata, model=model)
+            else:
+                result = await self._fuse_with_flux_apiyi(files=submit_files, metadata=metadata, model=model)
+        elif model.provider == ProviderType.gemini:
+            result = await self._fuse_with_gemini(files=submit_files, metadata=metadata, model=model)
+        else:
+            result = await self._fuse_with_flux(files=submit_files, metadata=metadata, model=model)
+
+        return FusionJobAccepted(
+            job_id=result.job_id,
+            status=result.status,
+            message=result.message,
+            provider=result.provider,
+            feature="multi_image_fusion",
+            model=result.model,
+            image_url=result.image_url,
+            metadata=metadata,
+            raw_response=result.raw_response,
+        )
+
+    async def transform_reference_image(
+        self,
+        *,
+        file: UploadFile | None,
+        metadata: ReferenceImageRequestMetadata,
+        source_image_url: str | None = None,
+    ) -> GenerationResult:
+        model = self._get_model_or_404(metadata.model)
+        if not model.supports_reference_images:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Model {metadata.model} does not support reference-image transforms.",
+            )
+
+        submit_file = file
+        if file is not None:
+            input_asset = await self.asset_service.create_input_asset(
+                file=file,
+                module_kind=self._map_feature_to_history_kind(metadata.feature),
+                metadata={
+                    "feature": metadata.feature,
+                    "model": metadata.model,
+                    "filename": metadata.filename,
+                },
+            )
+            metadata = metadata.model_copy(
+                update={
+                    "source_image_url": input_asset.preview_url,
+                    "source_image_storage_url": input_asset.storage_url,
+                }
+            )
+        elif source_image_url:
+            submit_file = await self._build_upload_file_from_url(source_image_url, metadata.filename)
+            metadata = metadata.model_copy(
+                update={
+                    "source_image_url": source_image_url,
+                    "source_image_storage_url": None,
+                }
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either file or source_image_url is required.",
+            )
+
+        if self._use_apiyi():
+            if model.provider == ProviderType.gemini:
+                return await self._transform_with_gemini_apiyi(file=submit_file, metadata=metadata, model=model)
+            return await self._transform_with_flux_apiyi(file=submit_file, metadata=metadata, model=model)
+
+        if model.provider == ProviderType.gemini:
+            return await self._transform_with_gemini(file=submit_file, metadata=metadata, model=model)
+        return await self._transform_with_flux(file=submit_file, metadata=metadata, model=model)
+
+    async def generate_multi_view(
+        self,
+        *,
+        file: UploadFile | None,
+        metadata: ReferenceImageRequestMetadata,
+        source_image_url: str | None = None,
+    ) -> GenerationResult:
+        if metadata.feature != "multi_view":
+            metadata = metadata.model_copy(update={"feature": "multi_view"})
+
+        # Multi-view is still backed by reference-image generation upstream,
+        # but we keep a dedicated service entry so the route, history metadata,
+        # and future provider-specific handling stay isolated from generic edits.
+        return await self.transform_reference_image(file=file, metadata=metadata, source_image_url=source_image_url)
+
+    async def split_multi_view_image(self, payload: MultiViewSplitRequest) -> MultiViewSplitResponse:
+        image_bytes, _ = await self._download_image(payload.image_url)
+        split_assets = await self._split_and_store_multi_view_assets(
+            image_bytes=image_bytes,
+            source_image_url=payload.image_url,
+            model=payload.model,
+            split_x_ratio=payload.split_x_ratio,
+            split_y_ratio=payload.split_y_ratio,
+            gap_x_ratio=payload.gap_x_ratio,
+            gap_y_ratio=payload.gap_y_ratio,
+        )
+
+        response = MultiViewSplitResponse(
+            status="completed",
+            message="Multi-view image split completed.",
+            source_image_url=payload.image_url,
+            split_x_ratio=payload.split_x_ratio,
+            split_y_ratio=payload.split_y_ratio,
+            gap_x_ratio=payload.gap_x_ratio,
+            gap_y_ratio=payload.gap_y_ratio,
+            items=[MultiViewSplitItem(**item) for item in split_assets],
+        )
+        first_item = split_assets[0] if split_assets else None
+        self._persist_history(
+            kind="multi_view_split",
+            title="Multi-view split",
+            model_id=payload.model,
+            provider="system",
+            status=response.status,
+            prompt="Split four-grid multi-view image into separate view assets.",
+            image_url=first_item["image_url"] if first_item else None,
+            storage_url=first_item["storage_url"] if first_item else None,
+            metadata={
+                "source_image_url": payload.image_url,
+                "split_x_ratio": payload.split_x_ratio,
+                "split_y_ratio": payload.split_y_ratio,
+                "gap_x_ratio": payload.gap_x_ratio,
+                "gap_y_ratio": payload.gap_y_ratio,
+                "items": split_assets,
+            },
+        )
+        return response
+
+    def _get_model_or_404(self, model_id: str) -> TTAPIModelConfig:
+        model = MODEL_CATALOG.get(model_id)
+        if model is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Unknown model: {model_id}",
+            )
+        return model
+
+    def _require_api_key(self) -> str:
+        if not self.settings.ttapi_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="TTAPI_API_KEY is not configured.",
+            )
+        return self.settings.ttapi_api_key
+
+    def _require_apiyi_api_key(self) -> str:
+        if not self.settings.apiyi_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="APIYI_API_KEY is not configured.",
+            )
+        return self.settings.apiyi_api_key
+
+    def _use_apiyi(self) -> bool:
+        return self.settings.ai_upstream_platform.strip().lower() == "apiyi"
+
+    def _upstream_platform_label(self) -> str:
+        return "APIYI" if self._use_apiyi() else "TTAPI"
+
+    def _build_model_pricing_hint(self, model: TTAPIModelConfig, platform_label: str) -> str:
+        if model.id == "gemini-3.1-flash-image-preview":
+            return f"Nano Banana 2 image generation via {platform_label}"
+        if model.id == "gemini-3-pro-image-preview":
+            return f"Nano Banana Pro image generation via {platform_label}"
+        if model.id == "flux1-schnell":
+            return f"Fast Flux image generation via {platform_label}"
+        if model.id == "flux1-dev":
+            return f"General Flux image generation via {platform_label}"
+        if model.id == "flux1-pro":
+            return f"High-quality Flux image generation via {platform_label}"
+        if model.id == "flux-2-pro":
+            return f"Flux 2 Pro image generation via {platform_label}"
+        if model.id == "flux-2-max":
+            return f"Flux 2 Max image generation via {platform_label}"
+        if model.id == "flux-kontext-pro":
+            return f"Flux Kontext Pro editing via {platform_label}"
+        if model.id == "flux-kontext-max":
+            return f"Flux Kontext Max editing via {platform_label}"
+        return f"{model.label} via {platform_label}"
+
+    async def _generate_with_gemini_apiyi(
+        self,
+        *,
+        request: TextToImageRequest,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_apiyi_api_key()
+        data = await self._post_json_with_bearer(
+            base_url=self.settings.apiyi_gemini_base_url,
+            path=f"/models/{model.id}:generateContent",
+            api_key=api_key,
+            payload={
+                "contents": [{"parts": [{"text": request.prompt}]}],
+                "generationConfig": {
+                    "responseModalities": ["IMAGE"],
+                    "imageConfig": {
+                        "aspectRatio": request.aspect_ratio,
+                        "imageSize": request.image_size,
+                    },
+                },
+            },
+        )
+        image_bytes, content_type = self._extract_inline_image(data)
+        stored_asset = await self._store_generated_binary_asset(
+            image_bytes=image_bytes,
+            content_type=content_type,
+            kind="text_to_image",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=None,
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            revised_prompt=self._extract_revised_prompt(data),
+            message="Image generation completed.",
+            raw_response=data,
+        )
+        self._persist_history(
+            kind="text_to_image",
+            title=f"Text-to-image: {model.label}",
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=request.prompt,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "apiyi",
+                "aspect_ratio": request.aspect_ratio,
+                "image_size": request.image_size,
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _generate_with_flux_apiyi(
+        self,
+        *,
+        request: TextToImageRequest,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_apiyi_api_key()
+        data = await self._post_json_with_bearer(
+            base_url=self.settings.apiyi_openai_base_url,
+            path="/images/generations",
+            api_key=api_key,
+            payload={
+                "model": self._map_apiyi_model_id(model.id),
+                "prompt": request.prompt,
+                "n": 1,
+                "size": request.size,
+                "extra_body": {
+                    "aspect_ratio": request.aspect_ratio,
+                },
+            },
+        )
+        upstream_image_url = self._extract_image_url(data)
+        stored_asset = await self._store_generated_asset(
+            image_url=upstream_image_url,
+            kind="text_to_image",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=self._extract_job_id(data),
+            status="completed" if stored_asset["access_url"] else "failed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Image generation completed." if stored_asset["access_url"] else "Image generation returned no asset.",
+            raw_response=data,
+        )
+        if result.image_url:
+            self._persist_history(
+                kind="text_to_image",
+                title=f"Text-to-image: {model.label}",
+                model_id=model.id,
+                provider=model.provider.value,
+                status=result.status,
+                prompt=request.prompt,
+                job_id=result.job_id,
+                image_url=result.image_url,
+                storage_url=stored_asset["storage_url"],
+                metadata={
+                    "upstream_platform": "apiyi",
+                    "aspect_ratio": request.aspect_ratio,
+                    "size": request.size,
+                    **stored_asset["metadata"],
+                },
+            )
+        return result
+
+    async def _generate_with_gemini(
+        self,
+        *,
+        request: TextToImageRequest,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_api_key()
+        payload = {
+            "model": model.id,
+            "prompt": request.prompt,
+            "aspect_ratio": request.aspect_ratio,
+            "image_size": request.image_size,
+            "thinking_level": request.thinking_level,
+        }
+        data = await self._post_json(
+            base_url=self.settings.ttapi_openai_base_url,
+            path="/gemini/image/generate",
+            api_key=api_key,
+            payload=payload,
+        )
+        image_url = self._extract_image_url(data)
+        stored_asset = await self._store_generated_asset(
+            image_url=image_url,
+            kind="text_to_image",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=None,
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            revised_prompt=self._extract_revised_prompt(data),
+            message="Image generation completed.",
+            raw_response=data,
+        )
+        self._persist_history(
+            kind="text_to_image",
+            title=f"Text-to-image: {model.label}",
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=request.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "aspect_ratio": request.aspect_ratio,
+                "image_size": request.image_size,
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _generate_with_flux(
+        self,
+        *,
+        request: TextToImageRequest,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_api_key()
+        payload = {
+            "prompt": request.prompt,
+            "mode": model.id,
+            "size": request.size,
+            "aspect_ratio": request.aspect_ratio,
+        }
+        submit_data = await self._post_json(
+            base_url=self.settings.ttapi_flux_base_url,
+            path="/flux/generate",
+            api_key=api_key,
+            payload=payload,
+        )
+        job_id = self._extract_job_id(submit_data)
+        if not job_id:
+            return GenerationResult(
+                job_id=None,
+                status="failed",
+                provider=model.provider,
+                model=model.id,
+                image_url=None,
+                message="Flux generation did not return a task id.",
+                raw_response=submit_data,
+            )
+
+        final_data = await self._poll_flux_result(job_id=job_id, api_key=api_key)
+        image_url = self._extract_image_url(final_data)
+        stored_asset = await self._store_generated_asset(
+            image_url=image_url,
+            kind="text_to_image",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=job_id,
+            status="completed" if image_url else "queued",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Image generation completed." if image_url else "Flux task submitted and still processing.",
+            raw_response=final_data,
+        )
+        if result.image_url:
+            self._persist_history(
+                kind="text_to_image",
+                title=f"Text-to-image: {model.label}",
+                model_id=model.id,
+                provider=model.provider.value,
+                status=result.status,
+                prompt=request.prompt,
+                job_id=result.job_id,
+                image_url=result.image_url,
+                storage_url=stored_asset["storage_url"],
+                metadata={
+                    "aspect_ratio": request.aspect_ratio,
+                    "size": request.size,
+                    **stored_asset["metadata"],
+                },
+            )
+        return result
+
+    async def _fuse_with_gemini(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: FusionRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_api_key()
+        refer_images = [await self._file_to_data_url(file) for file in files]
+        payload = {
+            "model": model.id,
+            "prompt": self._build_fusion_prompt(metadata),
+            "aspect_ratio": "1:1",
+            "image_size": "1K",
+            "thinking_level": "Minimal",
+            "refer_images": refer_images,
+        }
+        data = await self._post_json(
+            base_url=self.settings.ttapi_openai_base_url,
+            path="/gemini/image/generate",
+            api_key=api_key,
+            payload=payload,
+        )
+        image_url = self._extract_image_url(data)
+        stored_asset = await self._store_generated_asset(
+            image_url=image_url,
+            kind="fusion",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=None,
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=image_url,
+            revised_prompt=self._extract_revised_prompt(data),
+            message="Fusion generation completed.",
+            raw_response=data,
+        )
+        self._persist_history(
+            kind="fusion",
+            title=f"Fusion: {model.label}",
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                **self._build_fusion_history_metadata(metadata),
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _fuse_with_gemini_apiyi(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: FusionRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_apiyi_api_key()
+        parts: list[dict[str, Any]] = [{"text": self._build_fusion_prompt(metadata)}]
+        for file in files:
+            image_bytes = await file.read()
+            await file.seek(0)
+            parts.append(
+                {
+                    "inlineData": {
+                        "mimeType": file.content_type or "image/png",
+                        "data": base64.b64encode(image_bytes).decode("utf-8"),
+                    }
+                }
+            )
+        data = await self._post_json_with_bearer(
+            base_url=self.settings.apiyi_gemini_base_url,
+            path=f"/models/{model.id}:generateContent",
+            api_key=api_key,
+            payload={
+                "contents": [{"parts": parts}],
+                "generationConfig": {
+                    "responseModalities": ["IMAGE"],
+                    "imageConfig": {
+                        "aspectRatio": "1:1",
+                        "imageSize": "1K",
+                    },
+                },
+            },
+        )
+        image_bytes, content_type = self._extract_inline_image(data)
+        stored_asset = await self._store_generated_binary_asset(
+            image_bytes=image_bytes,
+            content_type=content_type,
+            kind="fusion",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=None,
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            revised_prompt=self._extract_revised_prompt(data),
+            message="Fusion generation completed.",
+            raw_response=data,
+        )
+        self._persist_history(
+            kind="fusion",
+            title=f"Fusion: {model.label}",
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "apiyi",
+                **self._build_fusion_history_metadata(metadata),
+                "negative_prompt": metadata.negative_prompt,
+                "strength": metadata.strength,
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _transform_with_gemini(
+        self,
+        *,
+        file: UploadFile,
+        metadata: ReferenceImageRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_api_key()
+        payload = {
+            "model": model.id,
+            "prompt": metadata.prompt,
+            "aspect_ratio": "1:1",
+            "image_size": "1K",
+            "thinking_level": "Minimal",
+            "refer_images": [await self._file_to_data_url(file)],
+        }
+        data = await self._post_json(
+            base_url=self.settings.ttapi_openai_base_url,
+            path="/gemini/image/generate",
+            api_key=api_key,
+            payload=payload,
+        )
+        image_url = self._extract_image_url(data)
+        stored_asset = await self._store_generated_asset(
+            image_url=image_url,
+            kind=metadata.feature,
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=None,
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            revised_prompt=self._extract_revised_prompt(data),
+            message="Reference image transform completed.",
+            raw_response=data,
+        ).model_copy(update=self._build_reference_result_update(metadata))
+        self._persist_history(
+            kind=self._map_feature_to_history_kind(metadata.feature),
+            title=self._feature_title(metadata.feature, model.label),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                **self._build_reference_history_metadata(metadata),
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _transform_with_gemini_apiyi(
+        self,
+        *,
+        file: UploadFile,
+        metadata: ReferenceImageRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_apiyi_api_key()
+        image_bytes = await file.read()
+        await file.seek(0)
+        data = await self._post_json_with_bearer(
+            base_url=self.settings.apiyi_gemini_base_url,
+            path=f"/models/{model.id}:generateContent",
+            api_key=api_key,
+            payload={
+                "contents": [
+                    {
+                        "parts": [
+                            {"text": metadata.prompt},
+                            {
+                                "inlineData": {
+                                    "mimeType": file.content_type or "image/png",
+                                    "data": base64.b64encode(image_bytes).decode("utf-8"),
+                                }
+                            },
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "responseModalities": ["IMAGE"],
+                    "imageConfig": {
+                        "aspectRatio": "1:1",
+                        "imageSize": "1K",
+                    },
+                },
+            },
+        )
+        result_image_bytes, content_type = self._extract_inline_image(data)
+        stored_asset = await self._store_generated_binary_asset(
+            image_bytes=result_image_bytes,
+            content_type=content_type,
+            kind=metadata.feature,
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=None,
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            revised_prompt=self._extract_revised_prompt(data),
+            message="Reference image transform completed.",
+            raw_response=data,
+        ).model_copy(update=self._build_reference_result_update(metadata))
+        self._persist_history(
+            kind=self._map_feature_to_history_kind(metadata.feature),
+            title=self._feature_title(metadata.feature, model.label),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "apiyi",
+                **self._build_reference_history_metadata(metadata),
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _fuse_with_flux(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: FusionRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_api_key()
+        multipart_files = [await self._build_multipart_file(file) for file in files]
+        form_data = {
+            "prompt": self._build_fusion_prompt(metadata),
+            "mode": model.id,
+            "aspect_ratio": "1:1",
+        }
+        submit_data = await self._post_multipart(
+            base_url=self.settings.ttapi_flux_base_url,
+            path="/flux/edits",
+            api_key=api_key,
+            data=form_data,
+            files=multipart_files,
+        )
+        job_id = self._extract_job_id(submit_data)
+        if not job_id:
+            return GenerationResult(
+                job_id=None,
+                status="failed",
+                provider=model.provider,
+                model=model.id,
+                message="Flux edit did not return a task id.",
+                raw_response=submit_data,
+            )
+        final_data = await self._poll_flux_result(job_id=job_id, api_key=api_key)
+        image_url = self._extract_image_url(final_data)
+        stored_asset = await self._store_generated_asset(
+            image_url=image_url,
+            kind="fusion",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=job_id,
+            status="completed" if image_url else "queued",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Fusion completed." if image_url else "Fusion task submitted and still processing.",
+            raw_response=final_data,
+        )
+        if result.image_url:
+            self._persist_history(
+                kind="fusion",
+                title=f"Fusion: {model.label}",
+                model_id=model.id,
+                provider=model.provider.value,
+                status=result.status,
+                prompt=metadata.prompt,
+                job_id=result.job_id,
+                image_url=result.image_url,
+                storage_url=stored_asset["storage_url"],
+                metadata={
+                    **self._build_fusion_history_metadata(metadata),
+                    **stored_asset["metadata"],
+                },
+            )
+        return result
+
+    async def _fuse_with_flux_apiyi(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: FusionRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_apiyi_api_key()
+        multipart_files = [await self._build_multipart_file(file) for file in files]
+        data = await self._post_multipart_with_bearer(
+            base_url=self.settings.apiyi_openai_base_url,
+            path="/images/edits",
+            api_key=api_key,
+            data={
+                "model": self._map_apiyi_model_id(model.id),
+                "prompt": self._build_fusion_prompt(metadata),
+            },
+            files=multipart_files,
+        )
+        upstream_image_url = self._extract_image_url(data)
+        stored_asset = await self._store_generated_asset(
+            image_url=upstream_image_url,
+            kind="fusion",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=self._extract_job_id(data),
+            status="completed" if stored_asset["access_url"] else "failed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Fusion completed." if stored_asset["access_url"] else "Fusion returned no asset.",
+            raw_response=data,
+        )
+        if result.image_url:
+            self._persist_history(
+                kind="fusion",
+                title=f"Fusion: {model.label}",
+                model_id=model.id,
+                provider=model.provider.value,
+                status=result.status,
+                prompt=metadata.prompt,
+                job_id=result.job_id,
+                image_url=result.image_url,
+                storage_url=stored_asset["storage_url"],
+                metadata={
+                    "upstream_platform": "apiyi",
+                    **self._build_fusion_history_metadata(metadata),
+                    "negative_prompt": metadata.negative_prompt,
+                    "strength": metadata.strength,
+                    **stored_asset["metadata"],
+                },
+            )
+        return result
+
+    async def _transform_with_flux(
+        self,
+        *,
+        file: UploadFile,
+        metadata: ReferenceImageRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_api_key()
+        multipart_files = [await self._build_multipart_file(file)]
+        form_data = {
+            "prompt": metadata.prompt,
+            "mode": model.id,
+            "aspect_ratio": "1:1",
+        }
+        submit_data = await self._post_multipart(
+            base_url=self.settings.ttapi_flux_base_url,
+            path="/flux/edits",
+            api_key=api_key,
+            data=form_data,
+            files=multipart_files,
+        )
+        job_id = self._extract_job_id(submit_data)
+        if not job_id:
+            return GenerationResult(
+                job_id=None,
+                status="failed",
+                provider=model.provider,
+                model=model.id,
+                message="Flux transform did not return a task id.",
+                raw_response=submit_data,
+            )
+
+        final_data = await self._poll_flux_result(job_id=job_id, api_key=api_key)
+        image_url = self._extract_image_url(final_data)
+        stored_asset = await self._store_generated_asset(
+            image_url=image_url,
+            kind=metadata.feature,
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=job_id,
+            status="completed" if image_url else "queued",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Reference image transform completed." if image_url else "Reference image transform still processing.",
+            raw_response=final_data,
+        ).model_copy(update=self._build_reference_result_update(metadata))
+        if result.image_url:
+            self._persist_history(
+                kind=self._map_feature_to_history_kind(metadata.feature),
+                title=self._feature_title(metadata.feature, model.label),
+                model_id=model.id,
+                provider=model.provider.value,
+                status=result.status,
+                prompt=metadata.prompt,
+                job_id=result.job_id,
+                image_url=result.image_url,
+                storage_url=stored_asset["storage_url"],
+                metadata={
+                    **self._build_reference_history_metadata(metadata),
+                    **stored_asset["metadata"],
+                },
+        )
+        return result
+
+    async def _transform_with_flux_apiyi(
+        self,
+        *,
+        file: UploadFile,
+        metadata: ReferenceImageRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_apiyi_api_key()
+        multipart_files = [await self._build_multipart_file(file)]
+        data = await self._post_multipart_with_bearer(
+            base_url=self.settings.apiyi_openai_base_url,
+            path="/images/edits",
+            api_key=api_key,
+            data={
+                "model": self._map_apiyi_model_id(model.id),
+                "prompt": metadata.prompt,
+            },
+            files=multipart_files,
+        )
+        upstream_image_url = self._extract_image_url(data)
+        stored_asset = await self._store_generated_asset(
+            image_url=upstream_image_url,
+            kind=metadata.feature,
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=self._extract_job_id(data),
+            status="completed" if stored_asset["access_url"] else "failed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Reference image transform completed." if stored_asset["access_url"] else "Reference image transform returned no asset.",
+            raw_response=data,
+        ).model_copy(update=self._build_reference_result_update(metadata))
+        if result.image_url:
+            self._persist_history(
+                kind=self._map_feature_to_history_kind(metadata.feature),
+                title=self._feature_title(metadata.feature, model.label),
+                model_id=model.id,
+                provider=model.provider.value,
+                status=result.status,
+                prompt=metadata.prompt,
+                job_id=result.job_id,
+                image_url=result.image_url,
+                storage_url=stored_asset["storage_url"],
+                metadata={
+                    "upstream_platform": "apiyi",
+                    **self._build_reference_history_metadata(metadata),
+                    **stored_asset["metadata"],
+                },
+            )
+        return result
+
+    async def _post_json(
+        self,
+        *,
+        base_url: str,
+        path: str,
+        api_key: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self.settings.ttapi_timeout_seconds) as client:
+            response = await client.post(
+                f"{base_url}{path}",
+                headers={
+                    "TT-API-KEY": api_key,
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        return self._handle_response(response)
+
+    async def _post_json_with_bearer(
+        self,
+        *,
+        base_url: str,
+        path: str,
+        api_key: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self.settings.ttapi_timeout_seconds) as client:
+            response = await client.post(
+                f"{base_url}{path}",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        return self._handle_response(response)
+
+    async def _post_multipart(
+        self,
+        *,
+        base_url: str,
+        path: str,
+        api_key: str,
+        data: dict[str, str],
+        files: list[tuple[str, tuple[str, bytes, str]]],
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self.settings.ttapi_timeout_seconds) as client:
+            response = await client.post(
+                f"{base_url}{path}",
+                headers={"TT-API-KEY": api_key},
+                data=data,
+                files=files,
+            )
+        return self._handle_response(response)
+
+    async def _post_multipart_with_bearer(
+        self,
+        *,
+        base_url: str,
+        path: str,
+        api_key: str,
+        data: dict[str, str],
+        files: list[tuple[str, tuple[str, bytes, str]]],
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self.settings.ttapi_timeout_seconds) as client:
+            response = await client.post(
+                f"{base_url}{path}",
+                headers={"Authorization": f"Bearer {api_key}"},
+                data=data,
+                files=files,
+            )
+        return self._handle_response(response)
+
+    async def _poll_flux_result(self, *, job_id: str, api_key: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self.settings.ttapi_timeout_seconds) as client:
+            for _ in range(self.settings.ttapi_poll_attempts):
+                response = await client.request(
+                    "GET",
+                    f"{self.settings.ttapi_flux_base_url}/flux/fetch",
+                    headers={"TT-API-KEY": api_key},
+                    params={"jobId": job_id},
+                )
+                data = self._handle_response(response)
+                status_value = self._extract_status(data)
+                if status_value in {"completed", "succeeded", "success"}:
+                    return data
+                if status_value in {"failed", "error"}:
+                    return data
+                await asyncio.sleep(self.settings.ttapi_poll_interval_seconds)
+        return {"id": job_id, "status": "queued"}
+
+    def _handle_response(self, response: httpx.Response) -> dict[str, Any]:
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Invalid upstream response: {response.text}",
+            ) from exc
+
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={"upstream_status": response.status_code, "upstream_response": data},
+            )
+        return data
+
+    async def _file_to_data_url(self, file: UploadFile) -> str:
+        content = await file.read()
+        await file.seek(0)
+        mime_type = file.content_type or "image/png"
+        encoded = base64.b64encode(content).decode("utf-8")
+        return f"data:{mime_type};base64,{encoded}"
+
+    async def _build_multipart_file(self, file: UploadFile) -> tuple[str, tuple[str, bytes, str]]:
+        content = await file.read()
+        await file.seek(0)
+        return (
+            "image",
+            (
+                file.filename or f"{uuid4()}.png",
+                content,
+                file.content_type or "image/png",
+            ),
+        )
+
+    def _build_fusion_prompt(self, metadata: FusionRequestMetadata) -> str:
+        mode_hint = {
+            "balanced": "Blend the uploaded references evenly.",
+            "style_first": "Prioritize the shared style, material finish, and mood from the references.",
+            "structure_first": "Preserve the main structure and silhouette of the primary image.",
+            "detail_enhanced": "Focus on settings, texture, and small decorative detail.",
+        }[metadata.mode.value]
+        negative_hint = f" Negative prompt: {metadata.negative_prompt}." if metadata.negative_prompt else ""
+        return (
+            f"{metadata.prompt} {mode_hint} "
+            f"Primary image index: {metadata.primary_image_index}. "
+            f"Fusion strength: {metadata.strength:.2f}.{negative_hint}"
+        )
+
+    def _extract_job_id(self, data: dict[str, Any]) -> str | None:
+        for key in ("id", "task_id", "request_id", "jobId", "job_id"):
+            value = data.get(key)
+            if isinstance(value, str) and value:
+                return value
+        nested = data.get("data")
+        if isinstance(nested, dict):
+            for key in ("id", "task_id", "request_id", "jobId", "job_id"):
+                value = nested.get(key)
+                if isinstance(value, str) and value:
+                    return value
+        return None
+
+    def _extract_status(self, data: dict[str, Any]) -> str:
+        if isinstance(data.get("status"), str):
+            return data["status"].lower()
+        task = data.get("data")
+        if isinstance(task, dict) and isinstance(task.get("status"), str):
+            return task["status"].lower()
+        if isinstance(task, dict) and isinstance(task.get("state"), str):
+            return task["state"].lower()
+        return ""
+
+    def _extract_revised_prompt(self, data: dict[str, Any]) -> str | None:
+        data_list = data.get("data")
+        if isinstance(data_list, list) and data_list:
+            first_item = data_list[0]
+            if isinstance(first_item, dict):
+                prompt = first_item.get("revised_prompt")
+                if isinstance(prompt, str):
+                    return prompt
+        return None
+
+    def _extract_image_url(self, data: dict[str, Any]) -> str | None:
+        if isinstance(data.get("image_url"), str):
+            return data["image_url"]
+
+        if isinstance(data.get("url"), str):
+            return data["url"]
+
+        data_field = data.get("data")
+        if isinstance(data_field, list):
+            for item in data_field:
+                if isinstance(item, dict):
+                    for key in ("url", "image_url"):
+                        value = item.get(key)
+                        if isinstance(value, str):
+                            return value
+        if isinstance(data_field, dict):
+            for key in ("url", "image_url", "result_url", "imageUrl"):
+                value = data_field.get(key)
+                if isinstance(value, str):
+                    return value
+
+        result = data.get("result")
+        if isinstance(result, list):
+            for item in result:
+                if isinstance(item, str):
+                    return item
+                if isinstance(item, dict):
+                    value = item.get("url")
+                    if isinstance(value, str):
+                        return value
+
+        output = data.get("output")
+        if isinstance(output, list):
+            for item in output:
+                if isinstance(item, str):
+                    return item
+                if isinstance(item, dict):
+                    for key in ("url", "image_url"):
+                        value = item.get(key)
+                        if isinstance(value, str):
+                            return value
+        images = data.get("images")
+        if isinstance(images, list):
+            for item in images:
+                if isinstance(item, dict):
+                    value = item.get("url")
+                    if isinstance(value, str):
+                        return value
+        return None
+
+    def _extract_inline_image(self, data: dict[str, Any]) -> tuple[bytes, str]:
+        candidates = data.get("candidates")
+        if isinstance(candidates, list):
+            for candidate in candidates:
+                if not isinstance(candidate, dict):
+                    continue
+                content = candidate.get("content")
+                if not isinstance(content, dict):
+                    continue
+                parts = content.get("parts")
+                if not isinstance(parts, list):
+                    continue
+                for part in parts:
+                    if not isinstance(part, dict):
+                        continue
+                    inline_data = part.get("inlineData")
+                    if not isinstance(inline_data, dict):
+                        continue
+                    encoded = inline_data.get("data")
+                    if not isinstance(encoded, str) or not encoded:
+                        continue
+                    mime_type = inline_data.get("mimeType")
+                    if not isinstance(mime_type, str) or not mime_type:
+                        mime_type = "image/png"
+                    return base64.b64decode(encoded), mime_type
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"message": "No inline image found in upstream response.", "upstream_response": data},
+        )
+
+    def _map_apiyi_model_id(self, model_id: str) -> str:
+        mapping = {
+            "flux1-pro": "black-forest-labs/flux-pro-v1.1",
+            "flux-2-pro": "black-forest-labs/flux-pro-v1.1",
+            "flux-2-max": "black-forest-labs/flux-kontext-max",
+            "flux-kontext-pro": "flux-kontext-pro",
+            "flux-kontext-max": "black-forest-labs/flux-kontext-max",
+        }
+        return mapping.get(model_id, model_id)
+
+    def _persist_history(
+        self,
+        *,
+        kind: str,
+        title: str,
+        model_id: str,
+        provider: str,
+        status: str,
+        prompt: str,
+        job_id: str | None = None,
+        user_id: str | None = None,
+        image_url: str | None,
+        storage_url: str | None,
+        metadata: dict[str, object] | None,
+    ) -> None:
+        self.history_service.create_record(
+            HistoryRecordCreate(
+                kind=kind,  # type: ignore[arg-type]
+                title=title,
+                model=model_id,
+                provider=provider,
+                status=status,
+                prompt=prompt,
+                user_id=user_id,
+                job_id=job_id,
+                image_url=image_url,
+                storage_url=storage_url,
+                metadata=metadata,
+            )
+        )
+
+    def _map_feature_to_history_kind(self, feature: str) -> str:
+        feature_to_kind = {
+            "image_edit": "image_edit",
+            "sketch_to_realistic": "sketch_to_realistic",
+            "grayscale_relief": "grayscale_relief",
+            "multi_view": "multi_view",
+            "multi_view_refine": "multi_view",
+        }
+        return feature_to_kind.get(feature, "image_edit")
+
+    def _feature_title(self, feature: str, model_label: str) -> str:
+        title_map = {
+            "grayscale_relief": "Grayscale relief",
+            "image_edit": "Image edit",
+            "sketch_to_realistic": "Sketch to realistic",
+            "multi_view": "Multi-view",
+            "multi_view_refine": "Multi-view refine",
+        }
+        prefix = title_map.get(feature, "Reference transform")
+        return f"{prefix}: {model_label}"
+
+    def _build_reference_history_metadata(self, metadata: ReferenceImageRequestMetadata) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "feature": metadata.feature,
+            "source_filename": metadata.filename,
+            "strength": metadata.strength,
+            "negative_prompt": metadata.negative_prompt,
+        }
+        if metadata.source_image_url:
+            payload["source_image_url"] = metadata.source_image_url
+        if metadata.source_image_storage_url:
+            payload["source_image_storage_url"] = metadata.source_image_storage_url
+        return payload
+
+    def _build_reference_result_update(self, metadata: ReferenceImageRequestMetadata) -> dict[str, str]:
+        update: dict[str, str] = {}
+        if metadata.source_image_url:
+            update["source_image_url"] = metadata.source_image_url
+        if metadata.source_image_storage_url:
+            update["source_image_storage_url"] = metadata.source_image_storage_url
+        return update
+
+    def _build_fusion_history_metadata(self, metadata: FusionRequestMetadata) -> dict[str, object]:
+        return {
+            "mode": metadata.mode.value,
+            "image_count": metadata.image_count,
+            "primary_image_index": metadata.primary_image_index,
+            "filenames": metadata.filenames,
+            "source_images": [item.model_dump() for item in metadata.source_images],
+        }
+
+    def _build_asset_content_url(self, storage_url: str, filename: str | None = None) -> str:
+        query: dict[str, str] = {"storage_url": storage_url}
+        if filename:
+            query["filename"] = filename
+        return f"/api/v1/assets/content?{urlencode(query)}"
+
+    async def _store_generated_asset(
+        self,
+        *,
+        image_url: str | None,
+        kind: str,
+        model: str,
+    ) -> dict[str, Any]:
+        if not image_url:
+            return {"storage_url": None, "access_url": None, "metadata": {}}
+
+        if not self.storage_service.is_configured():
+            image_bytes, content_type = await self._download_image(image_url)
+            object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
+            storage_url = self._store_local_generated_asset(
+                object_key=object_key,
+                image_bytes=image_bytes,
+            )
+            access_url = self._build_asset_content_url(storage_url)
+            return {
+                "storage_url": storage_url,
+                "access_url": access_url,
+                "metadata": {
+                    "storage_provider": "local_disk",
+                    "object_key": object_key,
+                    "source_image_url": image_url,
+                },
+            }
+
+        image_bytes, content_type = await self._download_image(image_url)
+        object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
+        stored = self.storage_service.upload_bytes(
+            object_key=object_key,
+            content=image_bytes,
+            content_type=content_type,
+        )
+        access_url = self._build_asset_content_url(stored.storage_url)
+        return {
+            "storage_url": stored.storage_url,
+            "access_url": access_url,
+            "metadata": {
+                "storage_provider": self.settings.oss_provider,
+                "object_key": stored.object_key,
+                "source_image_url": image_url,
+            },
+        }
+
+    async def _store_generated_binary_asset(
+        self,
+        *,
+        image_bytes: bytes,
+        content_type: str,
+        kind: str,
+        model: str,
+    ) -> dict[str, Any]:
+        if not self.storage_service.is_configured():
+            object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
+            storage_url = self._store_local_generated_asset(
+                object_key=object_key,
+                image_bytes=image_bytes,
+            )
+            access_url = self._build_asset_content_url(storage_url)
+            return {
+                "storage_url": storage_url,
+                "access_url": access_url,
+                "metadata": {
+                    "storage_provider": "local_disk",
+                    "object_key": object_key,
+                },
+            }
+
+        object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
+        stored = self.storage_service.upload_bytes(
+            object_key=object_key,
+            content=image_bytes,
+            content_type=content_type,
+        )
+        access_url = self._build_asset_content_url(stored.storage_url)
+        return {
+            "storage_url": stored.storage_url,
+            "access_url": access_url,
+            "metadata": {
+                "storage_provider": self.settings.oss_provider,
+                "object_key": stored.object_key,
+            },
+        }
+
+    async def _split_and_store_multi_view_assets(
+        self,
+        *,
+        image_bytes: bytes,
+        source_image_url: str,
+        model: str,
+        split_x_ratio: float,
+        split_y_ratio: float,
+        gap_x_ratio: float,
+        gap_y_ratio: float,
+    ) -> list[dict[str, Any]]:
+        split_items = self._split_multi_view_binary(
+            image_bytes=image_bytes,
+            split_x_ratio=split_x_ratio,
+            split_y_ratio=split_y_ratio,
+            gap_x_ratio=gap_x_ratio,
+            gap_y_ratio=gap_y_ratio,
+        )
+
+        stored_items: list[dict[str, Any]] = []
+        for item in split_items:
+            stored_asset = await self._store_generated_binary_asset(
+                image_bytes=item["image_bytes"],
+                content_type="image/png",
+                kind=f"multi_view/{item['view']}",
+                model=model,
+            )
+            stored_items.append(
+                {
+                    "view": item["view"],
+                    "image_url": stored_asset["access_url"],
+                    "storage_url": stored_asset["storage_url"],
+                    "width": item["width"],
+                    "height": item["height"],
+                    "source_image_url": source_image_url,
+                }
+            )
+
+        return stored_items
+
+    async def _download_image(self, image_url: str) -> tuple[bytes, str]:
+        if image_url.startswith(("local://", "oss://", "/api/v1/assets/")):
+            content, content_type, _ = self.asset_service.fetch_asset_bytes(image_url)
+            return content, content_type
+
+        async with httpx.AsyncClient(timeout=self.settings.ttapi_timeout_seconds) as client:
+            response = await client.get(image_url)
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to download upstream image asset, status={response.status_code}.",
+            )
+        content_type = response.headers.get("Content-Type", "image/png").split(";")[0].strip() or "image/png"
+        return response.content, content_type
+
+    async def _build_upload_file_from_url(self, image_url: str, filename: str | None = None) -> UploadFile:
+        image_bytes, content_type = await self._download_image(image_url)
+        resolved_filename = filename or f"reference{self._guess_extension(content_type)}"
+        return UploadFile(
+            file=BytesIO(image_bytes),
+            filename=resolved_filename,
+            headers=Headers({"content-type": content_type}),
+        )
+
+    def _split_multi_view_binary(
+        self,
+        *,
+        image_bytes: bytes,
+        split_x_ratio: float,
+        split_y_ratio: float,
+        gap_x_ratio: float,
+        gap_y_ratio: float,
+    ) -> list[dict[str, Any]]:
+        try:
+            from PIL import Image
+        except ModuleNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Pillow is not installed. Please install Pillow to enable multi-view splitting.",
+            ) from exc
+
+        image = Image.open(BytesIO(image_bytes)).convert("RGBA")
+        width, height = image.size
+
+        split_x = int(round(width * split_x_ratio))
+        split_y = int(round(height * split_y_ratio))
+        gap_x = int(round(width * gap_x_ratio))
+        gap_y = int(round(height * gap_y_ratio))
+
+        left_end = split_x - gap_x // 2
+        right_start = split_x + ceil(gap_x / 2)
+        top_end = split_y - gap_y // 2
+        bottom_start = split_y + ceil(gap_y / 2)
+
+        if left_end <= 0 or top_end <= 0 or right_start >= width or bottom_start >= height:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Split line or gap is out of image bounds.",
+            )
+
+        boxes = [
+            ("front", (0, 0, left_end, top_end)),
+            ("side", (right_start, 0, width, top_end)),
+            ("top", (0, bottom_start, left_end, height)),
+            ("back", (right_start, bottom_start, width, height)),
+        ]
+
+        results: list[dict[str, Any]] = []
+        for view_name, box in boxes:
+            left, upper, right, lower = box
+            if right - left < 8 or lower - upper < 8:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Split area for {view_name} is too small. Please adjust cut lines.",
+                )
+
+            cropped = image.crop(box)
+            output = BytesIO()
+            cropped.save(output, format="PNG")
+            results.append(
+                {
+                    "view": view_name,
+                    "image_bytes": output.getvalue(),
+                    "width": cropped.size[0],
+                    "height": cropped.size[1],
+                }
+            )
+
+        return results
+
+    def _build_object_key(self, *, kind: str, model: str, content_type: str) -> str:
+        now = datetime.utcnow()
+        extension = self._guess_extension(content_type)
+        return f"generated/{kind}/{model}/{now:%Y/%m/%d}/{uuid4()}{extension}"
+
+    def _store_local_generated_asset(self, *, object_key: str, image_bytes: bytes) -> str:
+        local_path = self._resolve_local_object_path(object_key)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_path.write_bytes(image_bytes)
+        return f"local://{object_key}"
+
+    def _resolve_local_object_path(self, object_key: str) -> Path:
+        normalized_parts = [part for part in Path(object_key).parts if part not in {"", ".", ".."}]
+        local_path = self.local_asset_root.joinpath(*normalized_parts)
+        resolved_root = self.local_asset_root.resolve()
+        resolved_path = local_path.resolve()
+        if not str(resolved_path).startswith(str(resolved_root)):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid local asset path.")
+        return resolved_path
+
+    def _guess_extension(self, content_type: str) -> str:
+        mapping = {
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+        }
+        return mapping.get(content_type.lower(), ".png")

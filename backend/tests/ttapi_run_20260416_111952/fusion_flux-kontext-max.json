@@ -1,0 +1,14 @@
+{
+  "model": "flux-kontext-max",
+  "status_code": 502,
+  "response": {
+    "detail": {
+      "upstream_status": 402,
+      "upstream_response": {
+        "status": "FAILED",
+        "message": "Insufficient balance in TT API.",
+        "data": null
+      }
+    }
+  }
+}

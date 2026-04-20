@@ -1,0 +1,94 @@
+{
+  "models": [
+    {
+      "id": "gemini-3.1-flash-image-preview",
+      "label": "Nano Banana 2",
+      "provider": "gemini",
+      "category": "image_generation",
+      "supports_text_to_image": true,
+      "supports_multi_image_fusion": true,
+      "supports_reference_images": true,
+      "pricing_hint": "Gemini image preview family on TTAPI"
+    },
+    {
+      "id": "gemini-3-pro-image-preview",
+      "label": "Nano Banana Pro",
+      "provider": "gemini",
+      "category": "image_generation",
+      "supports_text_to_image": true,
+      "supports_multi_image_fusion": true,
+      "supports_reference_images": true,
+      "pricing_hint": "Gemini pro image preview family on TTAPI"
+    },
+    {
+      "id": "flux1-schnell",
+      "label": "Flux Schnell",
+      "provider": "flux",
+      "category": "image_generation",
+      "supports_text_to_image": true,
+      "supports_multi_image_fusion": false,
+      "supports_reference_images": false,
+      "pricing_hint": "Fast Flux generation"
+    },
+    {
+      "id": "flux1-dev",
+      "label": "Flux Dev",
+      "provider": "flux",
+      "category": "image_generation",
+      "supports_text_to_image": true,
+      "supports_multi_image_fusion": false,
+      "supports_reference_images": false,
+      "pricing_hint": "General Flux development model"
+    },
+    {
+      "id": "flux1-pro",
+      "label": "Flux Pro",
+      "provider": "flux",
+      "category": "image_generation",
+      "supports_text_to_image": true,
+      "supports_multi_image_fusion": false,
+      "supports_reference_images": false,
+      "pricing_hint": "Higher quality Flux generation"
+    },
+    {
+      "id": "flux-2-pro",
+      "label": "Flux 2 Pro",
+      "provider": "flux",
+      "category": "image_generation",
+      "supports_text_to_image": true,
+      "supports_multi_image_fusion": false,
+      "supports_reference_images": false,
+      "pricing_hint": "Flux 2 pro tier"
+    },
+    {
+      "id": "flux-2-max",
+      "label": "Flux 2 Max",
+      "provider": "flux",
+      "category": "image_generation",
+      "supports_text_to_image": true,
+      "supports_multi_image_fusion": false,
+      "supports_reference_images": false,
+      "pricing_hint": "Highest Flux 2 quality tier"
+    },
+    {
+      "id": "flux-kontext-pro",
+      "label": "Flux Kontext Pro",
+      "provider": "flux",
+      "category": "image_edit",
+      "supports_text_to_image": false,
+      "supports_multi_image_fusion": true,
+      "supports_reference_images": true,
+      "pricing_hint": "Flux context editing model"
+    },
+    {
+      "id": "flux-kontext-max",
+      "label": "Flux Kontext Max",
+      "provider": "flux",
+      "category": "image_edit",
+      "supports_text_to_image": false,
+      "supports_multi_image_fusion": true,
+      "supports_reference_images": true,
+      "pricing_hint": "Highest Flux context editing tier"
+    }
+  ]
+}

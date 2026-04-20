@@ -1,0 +1,174 @@
+import json
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+
+from app.core.config import get_settings
+from app.schemas.ai import (
+    FusionJobAccepted,
+    FusionMode,
+    FusionRequestMetadata,
+    GenerationFeatureCatalog,
+    GenerationResult,
+    ModelCatalogResponse,
+    MultiViewSplitRequest,
+    MultiViewSplitResponse,
+    ReferenceImageRequestMetadata,
+    TextToImageRequest,
+)
+from app.services.ai_service import AIService
+
+
+router = APIRouter()
+service = AIService()
+
+
+@router.get("/features", response_model=GenerationFeatureCatalog)
+def list_features() -> GenerationFeatureCatalog:
+    return service.get_feature_catalog()
+
+
+@router.get("/models", response_model=ModelCatalogResponse)
+def list_models() -> ModelCatalogResponse:
+    return service.get_model_catalog()
+
+
+@router.post("/text-to-image", response_model=GenerationResult)
+async def text_to_image(payload: TextToImageRequest) -> GenerationResult:
+    return await service.generate_text_to_image(payload)
+
+
+@router.post("/reference-image-transform", response_model=GenerationResult)
+async def reference_image_transform(
+    image: UploadFile | None = File(default=None),
+    prompt: str = Form(...),
+    model: str = Form(...),
+    feature: str = Form(default="image_edit"),
+    source_image_url: str | None = Form(default=None),
+    source_image_name: str | None = Form(default=None),
+    negative_prompt: str | None = Form(default=None),
+    strength: float = Form(default=0.75),
+) -> GenerationResult:
+    if image is None and not source_image_url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Either image or source_image_url is required.")
+
+    metadata = ReferenceImageRequestMetadata(
+        model=model,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        feature=feature,
+        strength=strength,
+        filename=(image.filename if image else source_image_name) or "reference.png",
+    )
+    return await service.transform_reference_image(file=image, metadata=metadata, source_image_url=source_image_url)
+
+
+@router.post("/multi-view", response_model=GenerationResult)
+async def multi_view_generation(
+    image: UploadFile | None = File(default=None),
+    prompt: str = Form(...),
+    model: str = Form(...),
+    source_image_url: str | None = Form(default=None),
+    source_image_name: str | None = Form(default=None),
+    negative_prompt: str | None = Form(default=None),
+    strength: float = Form(default=0.75),
+) -> GenerationResult:
+    if image is None and not source_image_url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Either image or source_image_url is required.")
+
+    metadata = ReferenceImageRequestMetadata(
+        model=model,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        feature="multi_view",
+        strength=strength,
+        filename=(image.filename if image else source_image_name) or "multi-view-reference.png",
+    )
+    return await service.generate_multi_view(file=image, metadata=metadata, source_image_url=source_image_url)
+
+
+@router.post("/split-multi-view", response_model=MultiViewSplitResponse)
+async def split_multi_view(payload: MultiViewSplitRequest) -> MultiViewSplitResponse:
+    return await service.split_multi_view_image(payload)
+
+
+@router.post(
+    "/fuse-images",
+    response_model=FusionJobAccepted,
+    status_code=status.HTTP_200_OK,
+)
+async def fuse_images(
+    images: list[UploadFile] | None = File(default=None),
+    prompt: str = Form(...),
+    model: str = Form(...),
+    source_image_urls_json: str | None = Form(default=None),
+    source_image_names_json: str | None = Form(default=None),
+    negative_prompt: str | None = Form(default=None),
+    mode: FusionMode = Form(default=FusionMode.balanced),
+    primary_image_index: int = Form(default=0),
+    strength: float = Form(default=0.75),
+) -> FusionJobAccepted:
+    settings = get_settings()
+    source_image_urls: list[str] = []
+    source_image_names: list[str] = []
+
+    if source_image_urls_json:
+        try:
+            parsed_urls = json.loads(source_image_urls_json)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source_image_urls_json.") from exc
+        if not isinstance(parsed_urls, list) or not all(isinstance(item, str) and item for item in parsed_urls):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="source_image_urls_json must be a string array.")
+        source_image_urls = parsed_urls
+
+    if source_image_names_json:
+        try:
+            parsed_names = json.loads(source_image_names_json)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source_image_names_json.") from exc
+        if not isinstance(parsed_names, list) or not all(isinstance(item, str) and item for item in parsed_names):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="source_image_names_json must be a string array.")
+        source_image_names = parsed_names
+
+    image_files = images or []
+    total_images = len(image_files) if image_files else len(source_image_urls)
+
+    if total_images < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least two images are required for fusion.",
+        )
+
+    if total_images > settings.ai_max_fusion_images:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"At most {settings.ai_max_fusion_images} images are supported.",
+        )
+
+    if primary_image_index < 0 or primary_image_index >= total_images:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="primary_image_index is out of range.",
+        )
+
+    if source_image_urls and source_image_names and len(source_image_urls) != len(source_image_names):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="source_image_urls_json and source_image_names_json must have the same length.",
+        )
+
+    filenames = (
+        [file.filename or f"image-{index + 1}.png" for index, file in enumerate(image_files)]
+        if image_files
+        else [source_image_names[index] if index < len(source_image_names) else f"image-{index + 1}.png" for index in range(len(source_image_urls))]
+    )
+    metadata = FusionRequestMetadata(
+        model=model,
+        image_count=total_images,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        mode=mode,
+        primary_image_index=primary_image_index,
+        strength=strength,
+        filenames=filenames,
+    )
+    return await service.fuse_images(files=image_files, metadata=metadata, source_image_urls=source_image_urls)
