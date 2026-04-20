@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { SectionHeader } from "../components/SectionHeader";
 import type { AssetItem, TaskSummary, WorkflowStage, WorkflowStat } from "../types/mockData";
+import { buildDownloadFilename, buildDownloadUrl } from "../utils/download";
 
 interface AssetManagementPageProps {
   assetItems: AssetItem[];
@@ -157,7 +158,16 @@ export function AssetManagementPage({
 
                 <div className="inline-action-row">
                   {canPreview ? (
-                    <a className="secondary-button compact-button" href={item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? undefined} download={`${item.name}.png`}>
+                    <a
+                      className="secondary-button compact-button"
+                      href={
+                        buildDownloadUrl(
+                          item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? null,
+                          buildDownloadFilename(item.name, item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? null),
+                        ) ?? item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? undefined
+                      }
+                      download={buildDownloadFilename(item.name, item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? null)}
+                    >
                       下载图片
                     </a>
                   ) : null}

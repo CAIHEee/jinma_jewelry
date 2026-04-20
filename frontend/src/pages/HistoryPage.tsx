@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import type { PersistedHistoryItem } from "../types/history";
 import type { WorkspaceRun } from "../types/workspace";
+import { buildDownloadFilename, buildDownloadUrl } from "../utils/download";
 import { formatHistoryTimestamp, getHistoryKindLabel, mergeModuleHistory, type ModuleHistoryEntry } from "../utils/history";
 
 interface HistoryPageProps {
@@ -138,7 +139,7 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
                         <img className="generated-image image-fit-contain" src={item.imageUrl} alt={item.title} />
                       </button>
                       <div className="inline-action-row">
-                        <a className="secondary-button" href={item.imageUrl} download={`${item.title}.png`}>
+                        <a className="secondary-button" href={buildDownloadUrl(item.imageUrl, buildDownloadFilename(item.title, item.imageUrl)) ?? item.imageUrl} download={buildDownloadFilename(item.title, item.imageUrl)}>
                           下载图片
                         </a>
                         {item.source === "persisted" && item.persistedId ? (

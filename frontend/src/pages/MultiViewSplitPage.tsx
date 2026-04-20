@@ -7,6 +7,7 @@ import { splitMultiViewImage, uploadInputAsset } from "../services/api";
 import type { MultiViewSplitItem, MultiViewSplitResponse } from "../types/fusion";
 import type { AssetItem } from "../types/mockData";
 import type { WorkspaceRun } from "../types/workspace";
+import { buildDownloadFilename, buildDownloadUrl } from "../utils/download";
 import type { ModuleHistoryEntry } from "../utils/history";
 
 interface MultiViewSplitPageProps {
@@ -31,7 +32,7 @@ function buildSplitDownloadName(item: MultiViewSplitItem | null) {
     return "multi-view-split-result.png";
   }
 
-  return `multi-view-${item.view}.png`;
+  return buildDownloadFilename(`multi-view-${item.view}`, item.image_url);
 }
 
 export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns }: MultiViewSplitPageProps) {
@@ -292,7 +293,7 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns }: MultiV
                             </button>
 
                             {item.image_url ? (
-                              <a className="split-result-thumbnail-download" href={item.image_url} download={buildSplitDownloadName(item)}>
+                              <a className="split-result-thumbnail-download" href={buildDownloadUrl(item.image_url, buildSplitDownloadName(item)) ?? item.image_url} download={buildSplitDownloadName(item)}>
                                 下载图片
                               </a>
                             ) : null}

@@ -116,6 +116,28 @@ class AssetService:
             headers={"Content-Disposition": f'inline; filename="{quote(resolved_filename)}"'},
         )
 
+    def _ensure_filename_extension(self, filename: str, media_type: str, storage_url: str) -> str:
+        if Path(filename).suffix:
+            return filename
+
+        guessed_extension = mimetypes.guess_extension(media_type, strict=False)
+        if guessed_extension:
+            return f"{filename}{guessed_extension}"
+
+        if storage_url.startswith("local://"):
+            object_key = storage_url.removeprefix("local://")
+            source_extension = Path(object_key).suffix
+            if source_extension:
+                return f"{filename}{source_extension}"
+
+        if storage_url.startswith("oss://"):
+            _, object_key = self.storage_service.parse_storage_url(storage_url)
+            source_extension = Path(object_key).suffix
+            if source_extension:
+                return f"{filename}{source_extension}"
+
+        return f"{filename}.png"
+
     def build_asset_content_url(self, storage_url: str, filename: str | None = None) -> str:
         query: dict[str, str] = {"storage_url": storage_url}
         if filename:
@@ -132,7 +154,8 @@ class AssetService:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local asset not found.")
 
             media_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
-            return local_path.read_bytes(), media_type, filename or local_path.name
+            final_filename = self._ensure_filename_extension(filename, media_type, storage_url) if filename else local_path.name
+            return local_path.read_bytes(), media_type, final_filename
 
         if storage_url.startswith("oss://"):
             bucket_name, object_key = self.storage_service.parse_storage_url(storage_url)
@@ -151,7 +174,7 @@ class AssetService:
                 ) from exc
 
             media_type = headers.get("Content-Type") or mimetypes.guess_type(object_key)[0] or "application/octet-stream"
-            return content, media_type, resolved_filename
+            return content, media_type, self._ensure_filename_extension(resolved_filename, media_type, storage_url)
 
         if storage_url.startswith(("http://", "https://")):
             try:
@@ -169,7 +192,8 @@ class AssetService:
                 )
 
             media_type = response.headers.get("Content-Type", "application/octet-stream").split(";")[0].strip()
-            return response.content, media_type or "application/octet-stream", resolved_filename
+            normalized_media_type = media_type or "application/octet-stream"
+            return response.content, normalized_media_type, self._ensure_filename_extension(resolved_filename, normalized_media_type, storage_url)
 
         if storage_url.startswith("/api/v1/assets/content"):
             parsed = urlparse(storage_url)
