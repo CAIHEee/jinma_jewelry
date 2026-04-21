@@ -79,6 +79,7 @@ export interface ReferenceImageTransformRequest {
   feature: string;
   negativePrompt?: string;
   strength?: number;
+  imageSize?: string;
 }
 
 export interface MultiViewSplitRequest {

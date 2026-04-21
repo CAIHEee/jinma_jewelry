@@ -42,6 +42,10 @@ export interface AssetItem {
   persistedAssetId?: string;
   persistedHistoryId?: string;
   deletable?: boolean;
+  scope?: "private" | "community" | "history" | "session";
+  ownerUsername?: string | null;
+  canPublish?: boolean;
+  canUnpublish?: boolean;
 }
 
 export const mockWorkflowStats: WorkflowStat[] = [

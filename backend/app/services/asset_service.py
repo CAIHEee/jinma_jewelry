@@ -4,17 +4,16 @@ import json
 import mimetypes
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
-from urllib.parse import parse_qs, unquote, urlparse
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qs, quote, unquote, urlencode, urlparse
 
 import httpx
 from fastapi import HTTPException, UploadFile, status
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import desc, select
+from sqlalchemy import desc, or_, select
 
 from app.db.session import SessionLocal, init_db
 from app.models.asset_record import AssetRecord as AssetRecordModel
+from app.models.user import User
 from app.schemas.assets import AssetListResponse, AssetRecord
 from app.services.storage_service import StorageService
 
@@ -28,20 +27,27 @@ class AssetService:
         self.storage_service = StorageService()
         init_db()
 
-    def list_records(self) -> AssetListResponse:
+    def list_records(self, *, current_user: User, scope: str = "library", owner_user_id: str | None = None) -> AssetListResponse:
         with SessionLocal() as session:
             statement = select(AssetRecordModel).order_by(desc(AssetRecordModel.created_at))
+            statement = self._apply_scope(statement, current_user=current_user, scope=scope, owner_user_id=owner_user_id)
             records = session.execute(statement).scalars().all()
-        return AssetListResponse(items=[self._to_schema(record) for record in records])
+            owners = self._load_user_map(session)
+        return AssetListResponse(items=[self._to_schema(record, current_user=current_user, owners=owners) for record in records])
 
     async def create_input_asset(
         self,
         *,
         file: UploadFile,
         module_kind: str,
+        current_user: User,
         source_kind: str = "input_upload",
         metadata: dict[str, object] | None = None,
+        visibility: str = "private",
     ) -> AssetRecord:
+        if current_user.role != "root" and visibility != "private":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only root can upload community assets directly.")
+
         file_bytes = await file.read()
         await file.seek(0)
 
@@ -64,24 +70,98 @@ class AssetService:
 
         with SessionLocal() as session:
             record = AssetRecordModel(
+                user_id=current_user.id,
+                owner_user_id=current_user.id,
                 name=filename,
                 source_kind=source_kind,
                 module_kind=module_kind,
+                visibility=visibility,
                 storage_url=storage_url,
                 mime_type=content_type,
                 file_size=len(file_bytes),
                 metadata_json=self._dump_metadata(metadata),
+                published_at=datetime.now(timezone.utc) if visibility == "community" else None,
+                published_by_user_id=current_user.id if visibility == "community" else None,
             )
             session.add(record)
             session.commit()
             session.refresh(record)
-        return self._to_schema(record)
+            owners = self._load_user_map(session)
+        return self._to_schema(record, current_user=current_user, owners=owners)
 
-    def delete_record(self, asset_id: str) -> None:
+    def create_stored_asset_record(
+        self,
+        *,
+        current_user: User,
+        name: str,
+        module_kind: str,
+        storage_url: str,
+        mime_type: str | None,
+        file_size: int | None,
+        source_kind: str = "generated_output",
+        metadata: dict[str, object] | None = None,
+        visibility: str = "private",
+    ) -> AssetRecord:
+        with SessionLocal() as session:
+            record = AssetRecordModel(
+                user_id=current_user.id,
+                owner_user_id=current_user.id,
+                name=name,
+                source_kind=source_kind,
+                module_kind=module_kind,
+                visibility=visibility,
+                storage_url=storage_url,
+                mime_type=mime_type,
+                file_size=file_size,
+                metadata_json=self._dump_metadata(metadata),
+                published_at=datetime.now(timezone.utc) if visibility == "community" else None,
+                published_by_user_id=current_user.id if visibility == "community" else None,
+            )
+            session.add(record)
+            session.commit()
+            session.refresh(record)
+            owners = self._load_user_map(session)
+        return self._to_schema(record, current_user=current_user, owners=owners)
+
+    def publish_asset(self, asset_id: str, *, current_user: User) -> AssetRecord:
         with SessionLocal() as session:
             record = session.get(AssetRecordModel, asset_id)
             if record is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")
+            if record.owner_user_id != current_user.id and current_user.role != "root":
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot publish assets owned by another user.")
+            record.visibility = "community"
+            record.published_at = datetime.now(timezone.utc)
+            record.published_by_user_id = current_user.id
+            session.commit()
+            session.refresh(record)
+            owners = self._load_user_map(session)
+        return self._to_schema(record, current_user=current_user, owners=owners)
+
+    def unpublish_asset(self, asset_id: str, *, current_user: User) -> AssetRecord:
+        with SessionLocal() as session:
+            record = session.get(AssetRecordModel, asset_id)
+            if record is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")
+            if current_user.role != "root" and record.published_by_user_id != current_user.id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot unpublish another user's community asset.")
+            if record.owner_user_id != current_user.id and current_user.role != "root":
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot move another user's asset to private.")
+            record.visibility = "private"
+            record.published_at = None
+            record.published_by_user_id = None
+            session.commit()
+            session.refresh(record)
+            owners = self._load_user_map(session)
+        return self._to_schema(record, current_user=current_user, owners=owners)
+
+    def delete_record(self, asset_id: str, *, current_user: User) -> None:
+        with SessionLocal() as session:
+            record = session.get(AssetRecordModel, asset_id)
+            if record is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found.")
+            if not self._can_delete(record, current_user):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to delete this asset.")
 
             if self.storage_service.is_configured() and record.storage_url.startswith("oss://"):
                 try:
@@ -104,11 +184,11 @@ class AssetService:
         local_path = self._resolve_local_object_path(object_key)
         if not local_path.exists() or not local_path.is_file():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local asset not found.")
-
         media_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
         return FileResponse(local_path, media_type=media_type, filename=local_path.name)
 
-    def get_asset_content_response(self, storage_url: str, filename: str | None = None) -> Response:
+    def get_asset_content_response(self, storage_url: str, *, current_user: User, filename: str | None = None) -> Response:
+        self.ensure_storage_url_access(storage_url=storage_url, current_user=current_user)
         content, media_type, resolved_filename = self.fetch_asset_bytes(storage_url, filename=filename)
         return Response(
             content=content,
@@ -116,27 +196,26 @@ class AssetService:
             headers={"Content-Disposition": f'inline; filename="{quote(resolved_filename)}"'},
         )
 
-    def _ensure_filename_extension(self, filename: str, media_type: str, storage_url: str) -> str:
-        if Path(filename).suffix:
-            return filename
-
-        guessed_extension = mimetypes.guess_extension(media_type, strict=False)
-        if guessed_extension:
-            return f"{filename}{guessed_extension}"
-
-        if storage_url.startswith("local://"):
-            object_key = storage_url.removeprefix("local://")
-            source_extension = Path(object_key).suffix
-            if source_extension:
-                return f"{filename}{source_extension}"
-
-        if storage_url.startswith("oss://"):
-            _, object_key = self.storage_service.parse_storage_url(storage_url)
-            source_extension = Path(object_key).suffix
-            if source_extension:
-                return f"{filename}{source_extension}"
-
-        return f"{filename}.png"
+    def ensure_storage_url_access(self, *, storage_url: str, current_user: User) -> None:
+        if storage_url.startswith("/api/v1/assets/content"):
+            parsed = urlparse(storage_url)
+            nested_storage_url = parse_qs(parsed.query).get("storage_url", [None])[0]
+            if nested_storage_url:
+                self.ensure_storage_url_access(storage_url=nested_storage_url, current_user=current_user)
+            return
+        if storage_url.startswith(("http://", "https://", "/api/v1/assets/local/")):
+            return
+        with SessionLocal() as session:
+            record = session.execute(select(AssetRecordModel).where(AssetRecordModel.storage_url == storage_url)).scalar_one_or_none()
+            if record is None:
+                return
+            if current_user.role == "root":
+                return
+            if record.visibility == "community":
+                return
+            if record.owner_user_id == current_user.id:
+                return
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to this asset.")
 
     def build_asset_content_url(self, storage_url: str, filename: str | None = None) -> str:
         query: dict[str, str] = {"storage_url": storage_url}
@@ -152,7 +231,6 @@ class AssetService:
             local_path = self._resolve_local_object_path(object_key)
             if not local_path.exists() or not local_path.is_file():
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local asset not found.")
-
             media_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
             final_filename = self._ensure_filename_extension(filename, media_type, storage_url) if filename else local_path.name
             return local_path.read_bytes(), media_type, final_filename
@@ -161,18 +239,13 @@ class AssetService:
             bucket_name, object_key = self.storage_service.parse_storage_url(storage_url)
             if bucket_name != self.storage_service.settings.oss_bucket:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported OSS bucket.")
-
             try:
                 bucket = self.storage_service._build_bucket()
                 result = bucket.get_object(object_key)
                 content = result.read()
                 headers = getattr(result, "headers", {}) or {}
             except Exception as exc:  # noqa: BLE001
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Failed to download OSS asset: {exc}",
-                ) from exc
-
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to download OSS asset: {exc}") from exc
             media_type = headers.get("Content-Type") or mimetypes.guess_type(object_key)[0] or "application/octet-stream"
             return content, media_type, self._ensure_filename_extension(resolved_filename, media_type, storage_url)
 
@@ -180,20 +253,11 @@ class AssetService:
             try:
                 response = httpx.get(storage_url, timeout=60.0)
             except httpx.HTTPError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Failed to download remote asset: {exc}",
-                ) from exc
-
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to download remote asset: {exc}") from exc
             if response.status_code >= 400:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Failed to download remote asset, status={response.status_code}.",
-                )
-
-            media_type = response.headers.get("Content-Type", "application/octet-stream").split(";")[0].strip()
-            normalized_media_type = media_type or "application/octet-stream"
-            return response.content, normalized_media_type, self._ensure_filename_extension(resolved_filename, normalized_media_type, storage_url)
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to download remote asset, status={response.status_code}.")
+            media_type = response.headers.get("Content-Type", "application/octet-stream").split(";")[0].strip() or "application/octet-stream"
+            return response.content, media_type, self._ensure_filename_extension(resolved_filename, media_type, storage_url)
 
         if storage_url.startswith("/api/v1/assets/content"):
             parsed = urlparse(storage_url)
@@ -209,21 +273,86 @@ class AssetService:
 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported storage URL.")
 
-    def _to_schema(self, record: AssetRecordModel) -> AssetRecord:
-        preview_url = self.build_asset_content_url(record.storage_url, record.name)
+    def _apply_scope(self, statement, *, current_user: User, scope: str, owner_user_id: str | None):
+        if current_user.role == "root":
+            if scope == "community":
+                return statement.where(AssetRecordModel.visibility == "community")
+            if scope == "mine":
+                return statement.where(AssetRecordModel.owner_user_id == current_user.id)
+            if scope == "owner" and owner_user_id:
+                return statement.where(AssetRecordModel.owner_user_id == owner_user_id)
+            return statement
 
+        if scope == "community":
+            return statement.where(AssetRecordModel.visibility == "community")
+        if scope == "mine":
+            return statement.where(AssetRecordModel.owner_user_id == current_user.id)
+        return statement.where(
+            or_(
+                AssetRecordModel.visibility == "community",
+                AssetRecordModel.owner_user_id == current_user.id,
+            )
+        )
+
+    def _to_schema(self, record: AssetRecordModel, *, current_user: User, owners: dict[str, User]) -> AssetRecord:
+        preview_url = self.build_asset_content_url(record.storage_url, record.name)
+        owner = owners.get(record.owner_user_id or "")
         return AssetRecord(
             id=record.id,
             name=record.name,
             source_kind=record.source_kind,
             module_kind=record.module_kind,
+            visibility=record.visibility,
+            owner_user_id=record.owner_user_id,
+            owner_username=owner.username if owner else None,
             storage_url=record.storage_url,
             preview_url=preview_url,
             mime_type=record.mime_type,
             file_size=record.file_size,
             metadata=self._load_metadata(record.metadata_json),
+            can_delete=self._can_delete(record, current_user),
+            can_publish=self._can_publish(record, current_user),
+            can_unpublish=self._can_unpublish(record, current_user),
             created_at=self._normalize_datetime(record.created_at),
         )
+
+    def _can_delete(self, record: AssetRecordModel, current_user: User) -> bool:
+        if current_user.role == "root":
+            return True
+        if record.visibility == "community":
+            return False
+        return record.owner_user_id == current_user.id
+
+    def _can_publish(self, record: AssetRecordModel, current_user: User) -> bool:
+        if record.visibility != "private":
+            return False
+        return current_user.role == "root" or record.owner_user_id == current_user.id
+
+    def _can_unpublish(self, record: AssetRecordModel, current_user: User) -> bool:
+        if record.visibility != "community":
+            return False
+        return current_user.role == "root" or (record.owner_user_id == current_user.id and record.published_by_user_id == current_user.id)
+
+    def _load_user_map(self, session) -> dict[str, User]:
+        return {user.id: user for user in session.execute(select(User)).scalars().all()}
+
+    def _ensure_filename_extension(self, filename: str | None, media_type: str, storage_url: str) -> str:
+        resolved_filename = filename or "asset"
+        if Path(resolved_filename).suffix:
+            return resolved_filename
+        guessed_extension = mimetypes.guess_extension(media_type, strict=False)
+        if guessed_extension:
+            return f"{resolved_filename}{guessed_extension}"
+        if storage_url.startswith("local://"):
+            source_extension = Path(storage_url.removeprefix("local://")).suffix
+            if source_extension:
+                return f"{resolved_filename}{source_extension}"
+        if storage_url.startswith("oss://"):
+            _, object_key = self.storage_service.parse_storage_url(storage_url)
+            source_extension = Path(object_key).suffix
+            if source_extension:
+                return f"{resolved_filename}{source_extension}"
+        return f"{resolved_filename}.png"
 
     def _build_object_key(self, *, module_kind: str, filename: str, content_type: str) -> str:
         import re
@@ -262,9 +391,7 @@ class AssetService:
         if not metadata_json:
             return None
         loaded = json.loads(metadata_json)
-        if isinstance(loaded, dict):
-            return loaded
-        return None
+        return loaded if isinstance(loaded, dict) else None
 
     def _normalize_datetime(self, value: datetime) -> datetime:
         if value.tzinfo is not None:

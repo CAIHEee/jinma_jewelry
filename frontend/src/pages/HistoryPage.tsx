@@ -21,7 +21,7 @@ interface PreviewState {
   resultLabel?: string;
 }
 
-const filterTags = ["全部", "文生图", "多图融合", "线稿转写实图", "生成多视图", "多视图切图", "转灰度图"];
+const filterTags = ["全部", "文生图", "多图融合", "线稿转写实图", "产品精修", "裸石设计", "高清放大", "生成多视图", "多视图切图", "转灰度图"];
 
 export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onDeleteHistory }: HistoryPageProps) {
   const [keyword, setKeyword] = useState("");
@@ -37,6 +37,9 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
         ...mergeModuleHistory(persistedItems, workspaceRuns, "text_to_image"),
         ...mergeModuleHistory(persistedItems, workspaceRuns, "fusion"),
         ...mergeModuleHistory(persistedItems, workspaceRuns, "sketch_to_realistic"),
+        ...mergeModuleHistory(persistedItems, workspaceRuns, "product_refine"),
+        ...mergeModuleHistory(persistedItems, workspaceRuns, "gemstone_design"),
+        ...mergeModuleHistory(persistedItems, workspaceRuns, "upscale"),
         ...mergeModuleHistory(persistedItems, workspaceRuns, "multi_view"),
         ...mergeModuleHistory(persistedItems, workspaceRuns, "multi_view_split"),
         ...mergeModuleHistory(persistedItems, workspaceRuns, "grayscale_relief"),
@@ -125,6 +128,7 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
                     <p>
                       {item.provider} / {item.model} / {formatHistoryTimestamp(item.createdAt)}
                     </p>
+                    {"ownerUsername" in item && item.ownerUsername ? <p>归属: {item.ownerUsername}</p> : null}
                   </div>
                 </summary>
                 <div className="drawer-content">

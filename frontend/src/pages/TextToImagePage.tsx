@@ -74,7 +74,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
       setSelectedHistoryId(null);
       onRecordRun({
         kind: "text_to_image",
-        title: `文生图：${selectedModel.label}`,
+        title: "文生图",
         model: selectedModel.id,
         provider: response.provider,
         status: response.status,

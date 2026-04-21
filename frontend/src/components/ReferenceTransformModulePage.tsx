@@ -1,34 +1,73 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
-import { AssetSourcePicker } from "../components/AssetSourcePicker";
-import { PageGenerationHistory } from "../components/PageGenerationHistory";
-import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
-import { ResultPreviewModal } from "../components/ResultPreviewModal";
+import { AutoResizeTextarea } from "./AutoResizeTextarea";
+import { AssetSourcePicker } from "./AssetSourcePicker";
+import { PageGenerationHistory } from "./PageGenerationHistory";
+import { PromptTemplateImporter } from "./PromptTemplateImporter";
+import { ResultPreviewModal } from "./ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
 import { useModelCatalog } from "../hooks/useModelCatalog";
-import { submitMultiViewGeneration } from "../services/api";
+import { submitReferenceModuleTransform } from "../services/api";
 import type { GenerationResult } from "../types/fusion";
 import type { AssetItem } from "../types/mockData";
+import type { PromptTemplate } from "../types/prompts";
 import type { WorkspaceRun } from "../types/workspace";
 import type { ModuleHistoryEntry } from "../utils/history";
 
-interface MultiViewPageProps {
+interface ReferenceTransformModulePageProps {
   assetItems: AssetItem[];
   onRecordRun: (run: Omit<WorkspaceRun, "id" | "createdAt">) => void;
   pageRuns: ModuleHistoryEntry[];
   onDeleteHistory?: (historyId: string) => Promise<void> | void;
+  pageTitle: string;
+  historyTitle: string;
+  previewTitle: string;
+  resultLabel: string;
+  sourcePickerTitle: string;
+  uploadLabel: string;
+  promptLabel: string;
+  submitLabel: string;
+  loadingLabel: string;
+  emptyModelError: string;
+  emptyAssetError: string;
+  submitErrorLabel: string;
+  feature: "product_refine" | "gemstone_design" | "upscale";
+  module: PromptTemplate["module"];
+  historyKind: "product_refine" | "gemstone_design" | "upscale";
+  endpointPath: string;
+  defaultPrompt: string;
+  imageSize?: "1K" | "2K";
 }
 
-const multiViewTemplates = getPromptTemplatesByModule("multi-view");
-const defaultPrompt =
-  multiViewTemplates[0]?.chinese ??
-  "基于参考图生成珠宝多视图单图，统一结构、材质、工艺与比例，以四宫格形式输出。";
-
-export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHistory }: MultiViewPageProps) {
+export function ReferenceTransformModulePage({
+  assetItems,
+  onRecordRun,
+  pageRuns,
+  onDeleteHistory,
+  pageTitle,
+  historyTitle,
+  previewTitle,
+  resultLabel,
+  sourcePickerTitle,
+  uploadLabel,
+  promptLabel,
+  submitLabel,
+  loadingLabel,
+  emptyModelError,
+  emptyAssetError,
+  submitErrorLabel,
+  feature,
+  module,
+  historyKind,
+  endpointPath,
+  defaultPrompt,
+  imageSize = "1K",
+}: ReferenceTransformModulePageProps) {
+  const templates = getPromptTemplatesByModule(module);
+  const initialPrompt = templates[0]?.chinese ?? defaultPrompt;
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [model, setModel] = useState(defaultModelId);
-  const [multiViewPrompt, setMultiViewPrompt] = useState(defaultPrompt);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([]);
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -39,15 +78,11 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
 
   useEffect(() => {
     if (!models.length) return;
-    if (!model || !models.some((item) => item.id === model)) {
-      setModel(defaultModelId);
-    }
+    if (!model || !models.some((item) => item.id === model)) setModel(defaultModelId);
   }, [defaultModelId, model, models]);
 
   useEffect(() => {
-    if (result || selectedHistoryId || pageRuns.length === 0) {
-      return;
-    }
+    if (result || selectedHistoryId || pageRuns.length === 0) return;
     setSelectedHistoryId(pageRuns[0].id);
   }, [pageRuns, result, selectedHistoryId]);
 
@@ -60,71 +95,66 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
 
   useEffect(() => {
     return () => {
-      if (uploadedPreviewUrl) {
-        URL.revokeObjectURL(uploadedPreviewUrl);
-      }
+      if (uploadedPreviewUrl) URL.revokeObjectURL(uploadedPreviewUrl);
     };
   }, [uploadedPreviewUrl]);
 
-  async function handleGenerate() {
+  async function handleSubmit() {
     if (!selectedModel) {
-      setError("当前没有可用的多视图模型。");
+      setError(emptyModelError);
       return;
     }
-
     if (files.length === 0 && selectedAssets.length === 0) {
-      setError("请先选择一张参考图。");
+      setError(emptyAssetError);
       return;
     }
 
     setLoading(true);
     setError(null);
-
     try {
       const selectedAsset = selectedAssets[0] ?? null;
       const selectedAssetUrl = selectedAsset?.fileUrl ?? selectedAsset?.previewUrl ?? selectedAsset?.storageUrl ?? null;
       const inputFile = files[0] ?? null;
-      if (!inputFile && !selectedAssetUrl) {
-        throw new Error("未获取到可用参考图");
-      }
+      if (!inputFile && !selectedAssetUrl) throw new Error("未获取到可用参考图");
 
-      const response = await submitMultiViewGeneration({
+      const response = await submitReferenceModuleTransform(endpointPath, {
         file: inputFile,
         sourceImageUrl: inputFile ? undefined : selectedAssetUrl ?? undefined,
         sourceImageName: inputFile ? undefined : selectedAsset?.name,
         model: selectedModel.id,
-        prompt: multiViewPrompt,
-        feature: "multi_view",
+        prompt,
+        feature,
+        imageSize,
       });
 
       setResult(response);
       setSelectedHistoryId(null);
       onRecordRun({
-        kind: "multi_view",
-        title: "生成多视图",
+        kind: historyKind,
+        title: pageTitle,
         model: selectedModel.id,
         provider: response.provider,
         status: response.status,
         imageUrl: response.image_url,
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
-        prompt: multiViewPrompt,
+        prompt,
       });
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "多视图生成失败");
+      setError(submitError instanceof Error ? submitError.message : submitErrorLabel);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="page-stack compact-page split-page multi-view-page">
+    <div className="page-stack compact-page split-page">
       <section className="panel compact-panel">
-        <div className="dashboard-grid result-heavy">
-          <div className="form-card parameter-scroll-panel compact-parameter-panel">
+        <div className="dashboard-grid result-heavy image-edit-layout">
+          <div className="form-card parameter-scroll-panel image-edit-form compact-parameter-panel">
             <AssetSourcePicker
-              title="选择多视图来源"
+              title={sourcePickerTitle}
               assetItems={assetItems}
-              uploadLabel="上传多视图参考图"
+              uploadLabel={uploadLabel}
               onUploadFilesChange={setFiles}
               onSelectedAssetsChange={setSelectedAssets}
             />
@@ -143,21 +173,21 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
 
             <label className="input-group prompt-input-group compact-prompt-group">
               <div className="prompt-input-header compact-prompt-header">
-                <span>多视图提示词</span>
-                <PromptTemplateImporter templates={multiViewTemplates} onImport={setMultiViewPrompt} />
+                <span>{promptLabel}</span>
+                <PromptTemplateImporter templates={templates} onImport={setPrompt} />
               </div>
-              <AutoResizeTextarea className="prompt-textarea" rows={3} value={multiViewPrompt} onChange={(event) => setMultiViewPrompt(event.target.value)} />
+              <AutoResizeTextarea className="prompt-textarea" rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
             </label>
 
             {error ? <p className="error-text">{error}</p> : null}
 
-            <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>
-              {loading ? "生成中..." : "生成多视图单图"}
+            <button className="primary-button align-start" type="button" onClick={handleSubmit} disabled={loading || !selectedModel}>
+              {loading ? loadingLabel : submitLabel}
             </button>
           </div>
 
-          <div className="preview-history-layout multi-view-preview-layout">
-            <div className="stack-list preview-history-main multi-view-preview-main">
+          <div className="preview-history-layout">
+            <div className="stack-list preview-history-main">
               <details className="drawer-panel" open>
                 <summary className="drawer-summary compact-drawer-summary">
                   <div>
@@ -167,14 +197,14 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
                 </summary>
                 <div className="drawer-content">
                   <div className="result-preview-pane result-preview-pane-single">
-                    <span>多视图结果</span>
+                    <span>{resultLabel}</span>
                     <div
-                      className={previewResultUrl ? "generated-result-card compare multi-view-result-card interactive-result-card" : "generated-result-card compare multi-view-result-card"}
+                      className={previewResultUrl ? "generated-result-card compare image-edit-result-card interactive-result-card" : "generated-result-card compare image-edit-result-card"}
                       role={previewResultUrl ? "button" : undefined}
                       tabIndex={previewResultUrl ? 0 : undefined}
                       onClick={previewResultUrl ? () => setPreviewOpen(true) : undefined}
                     >
-                      {previewResultUrl ? <img className="generated-image image-fit-contain interactive-preview-image" src={previewResultUrl} alt="多视图结果" /> : <div className="multi-view-single-card">四宫格结果图</div>}
+                      {previewResultUrl ? <img className="generated-image image-fit-contain interactive-preview-image" src={previewResultUrl} alt={resultLabel} /> : <div className="compare-card after" />}
                     </div>
                   </div>
                 </div>
@@ -182,7 +212,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
             </div>
 
             <PageGenerationHistory
-              title="多视图历史"
+              title={historyTitle}
               items={pageRuns}
               activeId={selectedHistoryId}
               onPreview={(item) => setSelectedHistoryId(item.id)}
@@ -194,11 +224,11 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
 
       {previewOpen ? (
         <ResultPreviewModal
-          title="多视图结果预览"
+          title={previewTitle}
           sourceUrl={previewSourceUrl}
           sourceLabel="原始图"
           resultUrl={previewResultUrl}
-          resultLabel="多视图结果"
+          resultLabel={resultLabel}
           onClose={() => setPreviewOpen(false)}
         />
       ) : null}

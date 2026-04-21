@@ -8,6 +8,9 @@ export type NormalizedHistoryKind =
   | "multi_view"
   | "multi_view_split"
   | "sketch_to_realistic"
+  | "product_refine"
+  | "gemstone_design"
+  | "upscale"
   | "grayscale_relief";
 
 export interface ModuleHistoryEntry {
@@ -32,6 +35,7 @@ export interface ModuleHistoryEntry {
   }>;
   createdAt: string;
   source: "persisted" | "session";
+  ownerUsername?: string | null;
 }
 
 function isBrowserObjectUrl(value: string | null | undefined): value is string {
@@ -58,9 +62,8 @@ function normalizeComparableUrl(value: string | null | undefined): string {
     const url = new URL(value, "http://placeholder.local");
     if (url.pathname.endsWith("/api/v1/assets/content")) {
       const storageUrl = url.searchParams.get("storage_url");
-      const filename = url.searchParams.get("filename");
       if (storageUrl) {
-        return `${url.origin}${url.pathname}?storage_url=${storageUrl}${filename ? `&filename=${filename}` : ""}`;
+        return `${url.origin}${url.pathname}?storage_url=${storageUrl}`;
       }
     }
     return `${url.origin}${url.pathname}`;
@@ -75,6 +78,9 @@ const KIND_LABEL_MAP: Record<NormalizedHistoryKind, string> = {
   multi_view: "\u751f\u6210\u591a\u89c6\u56fe",
   multi_view_split: "\u591a\u89c6\u56fe\u5207\u56fe",
   sketch_to_realistic: "\u7ebf\u7a3f\u8f6c\u5199\u5b9e\u56fe",
+  product_refine: "产品精修",
+  gemstone_design: "裸石设计",
+  upscale: "高清放大",
   grayscale_relief: "\u8f6c\u7070\u5ea6\u56fe",
 };
 
@@ -91,6 +97,9 @@ export function normalizeHistoryKind(kind: string): NormalizedHistoryKind | null
     multi_image_fusion: "fusion",
     sketch_to_realistic: "sketch_to_realistic",
     image_edit: "sketch_to_realistic",
+    product_refine: "product_refine",
+    gemstone_design: "gemstone_design",
+    upscale: "upscale",
     grayscale_relief: "grayscale_relief",
   };
 
@@ -145,6 +154,7 @@ export function toModuleHistoryEntry(item: PersistedHistoryItem | WorkspaceRun):
       })),
       createdAt: item.createdAt,
       source: "session",
+      ownerUsername: null,
     };
   }
 
@@ -169,6 +179,7 @@ export function toModuleHistoryEntry(item: PersistedHistoryItem | WorkspaceRun):
     splitItems: extractSplitItems(item.metadata ?? null),
     createdAt: item.created_at,
     source: "persisted",
+    ownerUsername: item.owner_username,
   };
 }
 
@@ -177,7 +188,42 @@ export function buildModuleHistoryDedupeKey(item: ModuleHistoryEntry): string {
     return buildModuleHistorySplitDedupeKey(item);
   }
 
-  return [item.kind, item.title, item.model, item.provider, item.prompt, normalizeComparableUrl(item.imageUrl)].join("|");
+  return [item.kind, item.model, item.provider, item.prompt, normalizeComparableUrl(item.imageUrl)].join("|");
+}
+
+function containsChinese(value: string): boolean {
+  return /[\u4e00-\u9fff]/.test(value);
+}
+
+function looksGeneratedFilename(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return /^[0-9a-f-]{16,}\.[a-z0-9]+$/i.test(normalized) || normalized.startsWith("generated_");
+}
+
+function scoreTitleQuality(value: string): number {
+  if (!value.trim()) return 0;
+  if (containsChinese(value)) return 3;
+  if (looksGeneratedFilename(value)) return 1;
+  return 2;
+}
+
+function choosePreferredHistoryItem(left: ModuleHistoryEntry, right: ModuleHistoryEntry): ModuleHistoryEntry {
+  const leftTitleScore = scoreTitleQuality(left.title);
+  const rightTitleScore = scoreTitleQuality(right.title);
+  if (rightTitleScore > leftTitleScore) return right;
+  if (leftTitleScore > rightTitleScore) return left;
+
+  if (containsChinese(left.title) && containsChinese(right.title)) {
+    const leftLength = left.title.trim().length;
+    const rightLength = right.title.trim().length;
+    if (leftLength !== rightLength) {
+      return rightLength < leftLength ? right : left;
+    }
+  }
+
+  if (left.source === "session" && right.source === "persisted") return left;
+  if (left.source === "persisted" && right.source === "session") return right;
+  return right;
 }
 
 export function isPersistedHistoryDuplicateOfRun(item: PersistedHistoryItem, run: WorkspaceRun): boolean {
@@ -214,14 +260,23 @@ export function mergeModuleHistory(
       continue;
     }
 
-    const shouldReplace =
-      (existing.source === "session" && item.source === "persisted") ||
-      (!existing.sourceImageUrl && Boolean(item.sourceImageUrl)) ||
-      (existing.sourceImages.length === 0 && item.sourceImages.length > 0);
-
-    if (shouldReplace) {
-      deduped.set(dedupeKey, item);
+    let mergedItem = choosePreferredHistoryItem(existing, item);
+    if (!mergedItem.sourceImageUrl) {
+      mergedItem = { ...mergedItem, sourceImageUrl: existing.sourceImageUrl ?? item.sourceImageUrl ?? null };
     }
+    if (mergedItem.sourceImages.length === 0) {
+      mergedItem = { ...mergedItem, sourceImages: existing.sourceImages.length > 0 ? existing.sourceImages : item.sourceImages };
+    }
+    if (!mergedItem.imageUrl) {
+      mergedItem = { ...mergedItem, imageUrl: existing.imageUrl ?? item.imageUrl ?? null };
+    }
+    if (!mergedItem.persistedId) {
+      mergedItem = { ...mergedItem, persistedId: existing.persistedId ?? item.persistedId };
+    }
+    if (!mergedItem.ownerUsername) {
+      mergedItem = { ...mergedItem, ownerUsername: existing.ownerUsername ?? item.ownerUsername ?? null };
+    }
+    deduped.set(dedupeKey, mergedItem);
   }
 
   return Array.from(deduped.values()).sort((left, right) => {
@@ -305,7 +360,7 @@ function buildPersistedHistoryDedupeKey(item: PersistedHistoryItem): string {
     return [resolvedKind, item.model, sourceImageUrl || comparableUrl, splitX, splitY, gapX, gapY].join("|");
   }
 
-  return [resolvedKind, item.title, item.model, item.provider, item.prompt, comparableUrl].join("|");
+  return [resolvedKind, item.model, item.provider, item.prompt, normalizeComparableUrl(comparableUrl)].join("|");
 }
 
 function extractSourceImageUrl(metadata: Record<string, unknown> | null): string | null {
@@ -369,15 +424,17 @@ function buildModuleHistorySplitDedupeKey(item: ModuleHistoryEntry): string {
   ].join("|");
 }
 
-function extractSplitItems(metadata: Record<string, unknown> | null) {
+function extractSplitItems(
+  metadata: Record<string, unknown> | null,
+): Array<{ view: string; imageUrl: string | null; storageUrl?: string | null; width: number; height: number }> {
   if (!metadata || !Array.isArray(metadata.items)) {
     return [];
   }
 
-  return metadata.items
-    .map((item) => {
+  const results: Array<{ view: string; imageUrl: string | null; storageUrl?: string | null; width: number; height: number }> = [];
+  metadata.items.forEach((item) => {
       if (!item || typeof item !== "object") {
-        return null;
+        return;
       }
 
       const view = "view" in item && typeof item.view === "string" ? item.view : null;
@@ -395,20 +452,16 @@ function extractSplitItems(metadata: Record<string, unknown> | null) {
       const height = "height" in item && typeof item.height === "number" ? item.height : null;
 
       if (!view || width === null || height === null) {
-        return null;
+        return;
       }
 
-      return {
+      results.push({
         view,
         imageUrl,
-        storageUrl,
+        storageUrl: storageUrl ?? undefined,
         width,
         height,
-      };
-    })
-    .filter(
-      (
-        item,
-      ): item is { view: string; imageUrl: string | null; storageUrl?: string | null; width: number; height: number } => Boolean(item),
-    );
+      });
+    });
+  return results;
 }

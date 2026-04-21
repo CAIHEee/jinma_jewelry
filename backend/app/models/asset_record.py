@@ -13,19 +13,22 @@ class AssetRecord(Base):
     __tablename__ = "asset_records"
     __table_args__ = (
         Index("ix_asset_records_created_at", "created_at"),
-        Index("ix_asset_records_source_kind", "source_kind"),
-        Index("ix_asset_records_module_kind", "module_kind"),
+        Index("ix_asset_records_owner_visibility", "owner_user_id", "visibility"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    owner_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     source_kind: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     module_kind: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    visibility: Mapped[str] = mapped_column(String(32), default="private", nullable=False, index=True)
     storage_url: Mapped[str] = mapped_column(Text, nullable=False)
     mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -38,4 +41,6 @@ class AssetRecord(Base):
         nullable=False,
     )
 
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
+    owner = relationship("User", foreign_keys=[owner_user_id], back_populates="owned_assets")
+    publisher = relationship("User", foreign_keys=[published_by_user_id], back_populates="published_assets")

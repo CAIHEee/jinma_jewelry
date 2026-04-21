@@ -93,7 +93,7 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
       setSelectedHistoryId(null);
       onRecordRun({
         kind: "sketch_to_realistic",
-        title: `线稿转写实图：${selectedModel.label}`,
+        title: "线稿转写实图",
         model: selectedModel.id,
         provider: response.provider,
         status: response.status,

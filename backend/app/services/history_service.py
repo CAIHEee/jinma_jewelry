@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,6 +10,7 @@ from sqlalchemy import desc, select
 
 from app.db.session import SessionLocal, init_db
 from app.models.generation_record import GenerationRecord
+from app.models.user import User
 from app.schemas.history import HistoryListResponse, HistoryRecord, HistoryRecordCreate
 from app.services.storage_service import StorageService
 
@@ -21,20 +24,26 @@ class HistoryService:
         self._bootstrapped_legacy = False
         init_db()
 
-    def list_records(self) -> HistoryListResponse:
+    def list_records(self, *, current_user: User, include_all: bool = False) -> HistoryListResponse:
         self._bootstrap_from_legacy_file()
         with SessionLocal() as session:
             statement = select(GenerationRecord).order_by(desc(GenerationRecord.created_at))
+            if current_user.role != "root" or not include_all:
+                statement = statement.where(GenerationRecord.user_id == current_user.id)
             records = session.execute(statement).scalars().all()
-        items = [self._with_preview_url(self._to_schema(record)) for record in records]
-        items = self._dedupe_items(items)
-        return HistoryListResponse(items=items)
+            users = {user.id: user for user in session.execute(select(User)).scalars().all()}
+        items = [self._with_preview_url(self._to_schema(record, current_user=current_user, users=users)) for record in records]
+        return HistoryListResponse(items=self._dedupe_items(items))
 
-    def create_record(self, payload: HistoryRecordCreate) -> HistoryRecord:
+    def create_record(self, payload: HistoryRecordCreate, *, current_user: User | None = None) -> HistoryRecord:
         self._bootstrap_from_legacy_file()
+        user_id = current_user.id if current_user is not None else payload.user_id
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="History record requires a user.")
+
         with SessionLocal() as session:
             record = GenerationRecord(
-                user_id=payload.user_id,
+                user_id=user_id,
                 job_id=payload.job_id,
                 kind=payload.kind,
                 title=payload.title,
@@ -49,19 +58,22 @@ class HistoryService:
             session.add(record)
             session.commit()
             session.refresh(record)
-        return self._with_preview_url(self._to_schema(record))
+            users = {user.id: user for user in session.execute(select(User)).scalars().all()}
+        effective_user = current_user or users[user_id]
+        return self._with_preview_url(self._to_schema(record, current_user=effective_user, users=users))
 
-    def delete_record(self, history_id: str) -> None:
+    def delete_record(self, history_id: str, *, current_user: User) -> None:
         self._bootstrap_from_legacy_file()
         with SessionLocal() as session:
             record = session.get(GenerationRecord, history_id)
             if record is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="History record not found.")
+            if current_user.role != "root" and record.user_id != current_user.id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to delete this history record.")
 
             metadata = self._load_metadata(record.metadata_json)
             for storage_url in self._collect_generated_storage_urls(record.storage_url, metadata):
                 self._delete_storage_url(storage_url)
-
             session.delete(record)
             session.commit()
 
@@ -72,7 +84,8 @@ class HistoryService:
 
         with SessionLocal() as session:
             has_records = session.execute(select(GenerationRecord.id).limit(1)).first() is not None
-            if has_records:
+            root_user = session.execute(select(User).where(User.role == "root")).scalar_one_or_none()
+            if has_records or root_user is None:
                 self._bootstrapped_legacy = True
                 return
 
@@ -82,6 +95,7 @@ class HistoryService:
                 session.add(
                     GenerationRecord(
                         id=record.id,
+                        user_id=root_user.id,
                         kind=record.kind,
                         title=record.title,
                         model=record.model,
@@ -98,7 +112,8 @@ class HistoryService:
             session.commit()
         self._bootstrapped_legacy = True
 
-    def _to_schema(self, record: GenerationRecord) -> HistoryRecord:
+    def _to_schema(self, record: GenerationRecord, *, current_user: User, users: dict[str, User]) -> HistoryRecord:
+        owner = users.get(record.user_id or "")
         return HistoryRecord(
             id=record.id,
             kind=record.kind,  # type: ignore[arg-type]
@@ -113,6 +128,8 @@ class HistoryService:
             storage_url=record.storage_url,
             preview_url=None,
             metadata=self._load_metadata(record.metadata_json),
+            owner_username=owner.username if owner else None,
+            can_delete=current_user.role == "root" or record.user_id == current_user.id,
             created_at=self._normalize_datetime(record.created_at),
         )
 
@@ -125,9 +142,7 @@ class HistoryService:
         if not metadata_json:
             return None
         loaded = json.loads(metadata_json)
-        if isinstance(loaded, dict):
-            return loaded
-        return None
+        return loaded if isinstance(loaded, dict) else None
 
     def _normalize_datetime(self, value: datetime) -> datetime:
         if value.tzinfo is not None:
@@ -142,24 +157,17 @@ class HistoryService:
 
     def _with_preview_url(self, item: HistoryRecord) -> HistoryRecord:
         preview_url = self._build_asset_content_url(item.storage_url, item.title) if item.storage_url else item.image_url
-        return item.model_copy(
-            update={
-                "preview_url": preview_url,
-                "metadata": self._with_source_preview_metadata(item.metadata),
-            }
-        )
+        return item.model_copy(update={"preview_url": preview_url, "metadata": self._with_source_preview_metadata(item.metadata)})
 
     def _dedupe_items(self, items: list[HistoryRecord]) -> list[HistoryRecord]:
         seen: set[str] = set()
         deduped: list[HistoryRecord] = []
-
         for item in items:
-            dedupe_key = self._build_dedupe_key(item)
+            dedupe_key = f"{item.storage_url or item.image_url or item.id}|{item.title}|{item.created_at.isoformat()}"
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
             deduped.append(item)
-
         return deduped
 
     def _with_source_preview_metadata(self, metadata: dict[str, object] | None) -> dict[str, object] | None:
@@ -167,7 +175,6 @@ class HistoryService:
             return None
 
         enriched = dict(metadata)
-
         source_storage_url = enriched.get("source_image_storage_url")
         if isinstance(source_storage_url, str) and source_storage_url:
             enriched["source_image_url"] = self._build_asset_content_url(source_storage_url)
@@ -178,7 +185,6 @@ class HistoryService:
             for item in source_images:
                 if not isinstance(item, dict):
                     continue
-
                 next_item = dict(item)
                 storage_url = next_item.get("storage_url")
                 if isinstance(storage_url, str) and storage_url:
@@ -187,7 +193,6 @@ class HistoryService:
                 elif isinstance(next_item.get("source_image_url"), str):
                     next_item["preview_url"] = next_item["source_image_url"]
                 normalized_images.append(next_item)
-
             enriched["source_images"] = normalized_images
 
         items = enriched.get("items")
@@ -196,7 +201,6 @@ class HistoryService:
             for item in items:
                 if not isinstance(item, dict):
                     continue
-
                 next_item = dict(item)
                 storage_url = next_item.get("storage_url")
                 if isinstance(storage_url, str) and storage_url:
@@ -204,104 +208,29 @@ class HistoryService:
                     next_item["preview_url"] = self._build_asset_content_url(storage_url, filename)
                     next_item["image_url"] = next_item["preview_url"]
                 normalized_items.append(next_item)
-
             enriched["items"] = normalized_items
-
-        if "source_image_url" not in enriched and normalized_images:
-            first_preview = normalized_images[0].get("preview_url")
-            if isinstance(first_preview, str) and first_preview:
-                enriched["source_image_url"] = first_preview
 
         return enriched
 
-    def _collect_generated_storage_urls(
-        self,
-        storage_url: str | None,
-        metadata: dict[str, object] | None,
-    ) -> list[str]:
+    def _collect_generated_storage_urls(self, storage_url: str | None, metadata: dict[str, object] | None) -> list[str]:
         urls: list[str] = []
-        if isinstance(storage_url, str) and storage_url:
+        if storage_url:
             urls.append(storage_url)
-
-        items = metadata.get("items") if isinstance(metadata, dict) else None
-        if isinstance(items, list):
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                item_storage_url = item.get("storage_url")
-                if isinstance(item_storage_url, str) and item_storage_url:
-                    urls.append(item_storage_url)
-
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for item in urls:
-            if item in seen:
-                continue
-            seen.add(item)
-            deduped.append(item)
-        return deduped
+        if metadata:
+            items = metadata.get("items")
+            if isinstance(items, list):
+                for item in items:
+                    if isinstance(item, dict):
+                        nested = item.get("storage_url")
+                        if isinstance(nested, str) and nested:
+                            urls.append(nested)
+        return urls
 
     def _delete_storage_url(self, storage_url: str) -> None:
-        if storage_url.startswith("oss://"):
-            try:
-                _, object_key = self.storage_service.parse_storage_url(storage_url)
-                self.storage_service.delete_object(object_key)
-            except Exception as exc:  # noqa: BLE001
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Failed to delete generated asset from OSS: {exc}",
-                ) from exc
+        if not storage_url.startswith("oss://"):
             return
-
-        if storage_url.startswith("local://"):
-            local_path = self._resolve_local_object_path(storage_url.removeprefix("local://"))
-            if local_path.exists():
-                local_path.unlink()
-
-    def _build_dedupe_key(self, item: HistoryRecord) -> str:
-        resolved_kind = self._resolve_kind(item)
-        preview_url = item.preview_url or item.storage_url or item.image_url or ""
-
-        if resolved_kind == "multi_view_split":
-            metadata = item.metadata or {}
-            source_image_url = str(metadata.get("source_image_url") or "")
-            split_x = str(metadata.get("split_x_ratio") or "")
-            split_y = str(metadata.get("split_y_ratio") or "")
-            gap_x = str(metadata.get("gap_x_ratio") or "")
-            gap_y = str(metadata.get("gap_y_ratio") or "")
-            return "|".join([resolved_kind, item.model, source_image_url or preview_url, split_x, split_y, gap_x, gap_y])
-
-        return "|".join([resolved_kind, item.title, item.model, item.provider, item.prompt, preview_url])
-
-    def _resolve_kind(self, item: HistoryRecord) -> str:
-        normalized_title = item.title.strip().lower()
-        normalized_prompt = item.prompt.strip().lower()
-        metadata = item.metadata or {}
-        has_split_metadata = (
-            bool(metadata.get("split_x_ratio"))
-            or bool(metadata.get("split_y_ratio"))
-            or bool(metadata.get("gap_x_ratio"))
-            or bool(metadata.get("gap_y_ratio"))
-            or bool(metadata.get("items"))
-        )
-
-        if (
-            item.kind in {"multi_view_split", "split_multi_view"}
-            or "multi-view split" in normalized_title
-            or "多视图切图" in normalized_title
-            or "split four-grid multi-view" in normalized_prompt
-            or has_split_metadata
-        ):
-            return "multi_view_split"
-
-        return item.kind
-
-    def _resolve_local_object_path(self, object_key: str) -> Path:
-        normalized_parts = [part for part in Path(object_key).parts if part not in {"", ".", ".."}]
-        local_path = self.storage_dir / "local_assets"
-        candidate = local_path.joinpath(*normalized_parts)
-        resolved_root = local_path.resolve()
-        resolved_path = candidate.resolve()
-        if not str(resolved_path).startswith(str(resolved_root)):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid local asset path.")
-        return resolved_path
+        try:
+            _, object_key = self.storage_service.parse_storage_url(storage_url)
+            self.storage_service.delete_object(object_key)
+        except Exception:  # noqa: BLE001
+            return

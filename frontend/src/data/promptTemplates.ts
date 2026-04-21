@@ -62,6 +62,33 @@ export const promptTemplates: PromptTemplate[] = [
     note: "灰度立体化若走 Flux / Kontext，建议直接使用英文版。",
   },
   {
+    id: "product-refine-jewelry-shot",
+    title: "产品精修：电商精修图",
+    module: "product-refine",
+    english:
+      "Refine this jewelry product image into a premium commercial hero shot. Keep the original design and gemstone layout, improve metal polish, gemstone clarity, edge cleanup, lighting balance, and overall presentation quality while preserving realism.",
+    chinese:
+      "将这张珠宝产品图精修为更高级的商业主视觉。保持原始设计和宝石布局不变，优化金属抛光、宝石通透感、边缘清洁度、光线平衡与整体展示质感，同时保持真实感。",
+  },
+  {
+    id: "gemstone-design-cabochon",
+    title: "裸石设计：祖母绿主石方案",
+    module: "gemstone-design",
+    english:
+      "Design a premium loose gemstone concept based on the reference image, focusing on stone contour, polish, translucency, surface luster, and collectible presentation. Keep the gemstone as the visual subject with clean studio background.",
+    chinese:
+      "基于参考图设计高级裸石方案，重点表现宝石轮廓、抛光、通透感、表面光泽与收藏级展示效果。以裸石本身为主体，背景保持干净的棚拍展示环境。",
+  },
+  {
+    id: "upscale-jewelry-clean",
+    title: "高清放大：细节增强",
+    module: "upscale",
+    english:
+      "Upscale and enhance this jewelry image while preserving original composition. Improve edge sharpness, gemstone detail, metal texture, engraving clarity, and overall resolution without changing the design.",
+    chinese:
+      "在不改变原始构图的前提下，对这张珠宝图进行高清放大与细节增强。提升边缘清晰度、宝石细节、金属纹理、刻纹清晰度和整体分辨率，同时保持设计不变。",
+  },
+  {
     id: "fusion-jewelry-merge",
     title: "多图融合：结构与风格融合",
     module: "fusion",

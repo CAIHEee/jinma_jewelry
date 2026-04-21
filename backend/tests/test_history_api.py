@@ -1,13 +1,7 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
-
-
-client = TestClient(app)
-
-
-def test_history_create_and_list() -> None:
-    create_response = client.post(
+def test_history_create_and_list(auth_client: TestClient) -> None:
+    create_response = auth_client.post(
         "/api/v1/history",
         json={
             "kind": "text_to_image",
@@ -26,7 +20,7 @@ def test_history_create_and_list() -> None:
     created = create_response.json()
     assert created["title"] == "History smoke item"
 
-    list_response = client.get("/api/v1/history")
+    list_response = auth_client.get("/api/v1/history")
     assert list_response.status_code == 200
     items = list_response.json()["items"]
     assert any(item["id"] == created["id"] for item in items)

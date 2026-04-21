@@ -1,154 +1,447 @@
 /*
- Navicat Premium Data Transfer
+  Jinma Jewelry System bootstrap schema
+  Target: MySQL 8.x
 
- Source Server         : linuxsql
- Source Server Type    : MySQL
- Source Server Version : 80045
- Source Host           : 192.168.10.150:3306
- Source Schema         : jinma
-
- Target Server Type    : MySQL
- Target Server Version : 80045
- File Encoding         : 65001
-
- Date: 20/04/2026 10:34:20
+  This bootstrap file uses the new auth/permission/community-asset schema and
+  carries forward selected non-test business data from `jinma_old.sql`.
 */
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
--- ----------------------------
--- Table structure for asset_records
--- ----------------------------
+CREATE DATABASE IF NOT EXISTS `jinma`
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE `jinma`;
+
+DROP TABLE IF EXISTS `user_module_permissions`;
 DROP TABLE IF EXISTS `asset_records`;
-CREATE TABLE `asset_records`  (
-  `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `user_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `source_kind` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `module_kind` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  `storage_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `mime_type` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  `file_size` bigint(0) NULL DEFAULT NULL,
-  `metadata_json` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
-  `created_at` datetime(0) NOT NULL,
-  `updated_at` datetime(0) NOT NULL,
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `ix_asset_records_user_id`(`user_id`) USING BTREE,
-  INDEX `ix_asset_records_created_at`(`created_at`) USING BTREE,
-  INDEX `ix_asset_records_module_kind`(`module_kind`) USING BTREE,
-  CONSTRAINT `asset_records_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Records of asset_records
--- ----------------------------
-INSERT INTO `asset_records` VALUES ('03b58df5-63fb-4b1c-8795-0af3356f9f66', NULL, '1.jpg', 'input_upload', 'fusion', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/fusion/2026/04/18/1_38853d2e.jpg', 'image/jpeg', 168957, '{\"feature\": \"fusion\", \"model\": \"gemini-3.1-flash-image-preview\", \"primary_image_index\": 0}', '2026-04-18 02:56:46', '2026-04-18 02:56:46');
-INSERT INTO `asset_records` VALUES ('0a50f8ea-93cc-4c06-af8f-079510d9c217', NULL, 'QQ20260417-210334.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/QQ20260417-210334_15591d75.png', 'image/png', 82841, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"QQ20260417-210334.png\"}', '2026-04-19 09:37:55', '2026-04-19 09:37:55');
-INSERT INTO `asset_records` VALUES ('105638a5-4903-4dc8-93d1-6817badeba5d', NULL, 'generated_sketch_to_realistic_gemini-3.1-flash-image-preview_2026_04_17_198285f4-2cd4-4e5e-ba8e-79be2fbbed23.jpg', 'input_upload', 'multi_view', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/17/generated_sketch_to_realistic_gemini-3.1-flash-image-preview_2026_04_17_198285f4-2cd4-4e5e-ba8e-79be2fbbed23_016cf4e7.jpg', 'image/jpeg', 591832, '{\"feature\": \"multi_view\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"generated_sketch_to_realistic_gemini-3.1-flash-image-preview_2026_04_17_198285f4-2cd4-4e5e-ba8e-79be2fbbed23.jpg\"}', '2026-04-17 12:13:43', '2026-04-17 12:13:43');
-INSERT INTO `asset_records` VALUES ('1d8673ab-adc2-464c-acf0-19ab28c9600f', NULL, 'QQ20260417-212220.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/17/QQ20260417-212220_9421d652.png', 'image/png', 468878, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"QQ20260417-212220.png\"}', '2026-04-17 13:23:25', '2026-04-17 13:23:25');
-INSERT INTO `asset_records` VALUES ('29febbe5-e234-454f-aa6c-a1acaf9bf9ed', NULL, 'persisted-e9057609-415d-452d-ba87-020eeb9f2434.jpeg', 'input_upload', 'grayscale_relief', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/grayscale_relief/2026/04/19/persisted-e9057609-415d-452d-ba87-020eeb9f2434_1a84c2de.jpeg', 'image/jpeg', 370983, '{\"feature\": \"grayscale_relief\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"persisted-e9057609-415d-452d-ba87-020eeb9f2434.jpeg\"}', '2026-04-19 10:40:21', '2026-04-19 10:40:21');
-INSERT INTO `asset_records` VALUES ('380195f3-a7f6-4c28-8f18-2d5d59aa4153', NULL, 'test4.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test4_660dc0da.png', 'image/png', 189634, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"test4.png\"}', '2026-04-19 08:44:39', '2026-04-19 08:44:39');
-INSERT INTO `asset_records` VALUES ('3f0dc07a-b1b6-4c80-b9fd-1a2378d3db1d', NULL, 'generated_multi_view_gemini-3.1-flash-image-preview_2026_04_17_98e90f9f-5e4e-4f6e-b703-92121fe58660.jpg', 'input_upload', 'grayscale_relief', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/grayscale_relief/2026/04/17/generated_multi_view_gemini-3.1-flash-image-preview_2026_04_17_98e90f9f-5e4e-4f6e-b703-92121fe58660_942cf95d.jpg', 'image/jpeg', 503893, '{\"feature\": \"grayscale_relief\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"generated_multi_view_gemini-3.1-flash-image-preview_2026_04_17_98e90f9f-5e4e-4f6e-b703-92121fe58660.jpg\"}', '2026-04-17 12:14:47', '2026-04-17 12:14:47');
-INSERT INTO `asset_records` VALUES ('4db4c487-05db-4079-b3ad-df9621b68194', NULL, 'generated_sketch_to_realistic_gemini-3.1-flash-image-preview_2026_04_17_24cfdec3-333a-416a-b119-1e4225e6cd74.jpg', 'input_upload', 'multi_view', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/17/generated_sketch_to_realistic_gemini-3.1-flash-image-preview_2026_04_17_24cfdec3-333a-416a-b119-1e4225e6cd74_cc501371.jpg', 'image/jpeg', 602132, '{\"feature\": \"multi_view\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"generated_sketch_to_realistic_gemini-3.1-flash-image-preview_2026_04_17_24cfdec3-333a-416a-b119-1e4225e6cd74.jpg\"}', '2026-04-17 13:25:16', '2026-04-17 13:25:16');
-INSERT INTO `asset_records` VALUES ('4fb30baa-4b8a-4b14-9782-3ad1cb54f4a0', NULL, 'test4.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test4_8540a226.png', 'image/png', 189634, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"test4.png\"}', '2026-04-19 09:26:35', '2026-04-19 09:26:35');
-INSERT INTO `asset_records` VALUES ('6be3378d-4447-42c5-a0b9-89d76ce5f625', NULL, 'test1.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/20/test1_e9291b8d.png', 'image/png', 75576, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"test1.png\"}', '2026-04-20 01:27:50', '2026-04-20 01:27:50');
-INSERT INTO `asset_records` VALUES ('6db508c2-b97f-4a41-969f-207dcb80af9f', NULL, '2.jpg', 'input_upload', 'fusion', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/fusion/2026/04/18/2_6eb6aa3a.jpg', 'image/jpeg', 1779129, '{\"feature\": \"fusion\", \"model\": \"gemini-3.1-flash-image-preview\", \"primary_image_index\": 0}', '2026-04-18 02:56:47', '2026-04-18 02:56:47');
-INSERT INTO `asset_records` VALUES ('75e24946-ca78-4e31-b3b3-0d6e4c7261ef', NULL, 'test1.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test1_dd79d740.png', 'image/png', 75576, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"test1.png\"}', '2026-04-19 08:55:53', '2026-04-19 08:55:53');
-INSERT INTO `asset_records` VALUES ('7acefe39-7850-4637-ad2f-40b2553e77fe', NULL, 'gemini-3.1-flash-image-preview (nano-banana-2)_a_严格遵循输入草图的线条、比例和结构。不得 (1).png', 'input_upload', 'multi_view', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/16/gemini-3.1-flash-image-preview__nano-banana-2__a_______________________1__4895b38e.png', 'image/png', 1446248, '{\"feature\": \"multi_view\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"gemini-3.1-flash-image-preview (nano-banana-2)_a_严格遵循输入草图的线条、比例和结构。不得 (1).png\"}', '2026-04-16 12:54:46', '2026-04-16 12:54:46');
-INSERT INTO `asset_records` VALUES ('7dbbb597-3b87-45f4-ba39-7e1515d97caa', NULL, 'QQ20260417-210334.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/17/QQ20260417-210334_de98b6ca.png', 'image/png', 82841, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"QQ20260417-210334.png\"}', '2026-04-17 13:05:55', '2026-04-17 13:05:55');
-INSERT INTO `asset_records` VALUES ('92cfdf68-17a6-4297-b6f2-e708172d3f35', NULL, 'QQ20260417-210334.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/17/QQ20260417-210334_a4010f91.png', 'image/png', 82841, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"QQ20260417-210334.png\"}', '2026-04-17 13:06:38', '2026-04-17 13:06:38');
-INSERT INTO `asset_records` VALUES ('9df6f2f6-f093-42a8-95cf-3bf11bc6b703', NULL, 'test2.jpg', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test2_2af9aea4.jpg', 'image/jpeg', 124495, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"test2.jpg\"}', '2026-04-19 08:35:28', '2026-04-19 08:35:28');
-INSERT INTO `asset_records` VALUES ('a800326b-f195-4eeb-8552-6ea134aec1d7', NULL, 'session-sketch_to_realistic-1776591619504.jpeg', 'input_upload', 'multi_view', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/19/session-sketch_to_realistic-1776591619504_5e0b6fd3.jpeg', 'image/jpeg', 551197, '{\"feature\": \"multi_view\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"session-sketch_to_realistic-1776591619504.jpeg\"}', '2026-04-19 09:53:53', '2026-04-19 09:53:53');
-INSERT INTO `asset_records` VALUES ('ab794bbd-4c4a-4bce-a2b1-a7a33aae980e', NULL, '28d480fba255619a37a028d2bd364bd4.jpg', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/17/28d480fba255619a37a028d2bd364bd4_04f6c5bc.jpg', 'image/jpeg', 160570, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"28d480fba255619a37a028d2bd364bd4.jpg\"}', '2026-04-17 12:12:26', '2026-04-17 12:12:26');
-INSERT INTO `asset_records` VALUES ('ca90a828-c0fc-4de7-b766-840fa82dfd28', NULL, 'QQ20260420-094903.png', 'input_upload', 'multi_view', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/20/QQ20260420-094903_dcafbfc2.png', 'image/png', 351742, '{\"feature\": \"multi_view\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"QQ20260420-094903.png\"}', '2026-04-20 01:51:18', '2026-04-20 01:51:18');
-INSERT INTO `asset_records` VALUES ('dd07c9a7-9881-42db-8a1c-182ef5f60b27', NULL, 'QQ20260417-210334.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/17/QQ20260417-210334_5bcbd514.png', 'image/png', 82841, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"QQ20260417-210334.png\"}', '2026-04-17 13:04:44', '2026-04-17 13:04:44');
-INSERT INTO `asset_records` VALUES ('e9644eed-9aa4-45ab-b9c9-98d20a64939b', NULL, 'test4.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test4_fa3160c7.png', 'image/png', 189634, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"test4.png\"}', '2026-04-19 08:32:41', '2026-04-19 08:32:41');
-INSERT INTO `asset_records` VALUES ('f5ea8443-8be2-43bf-92fd-1e4d7dd5b5c5', NULL, 'test3.png', 'input_upload', 'sketch_to_realistic', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test3_15d9ef4e.png', 'image/png', 130357, '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"test3.png\"}', '2026-04-19 09:05:18', '2026-04-19 09:05:18');
-
--- ----------------------------
--- Table structure for generation_records
--- ----------------------------
 DROP TABLE IF EXISTS `generation_records`;
-CREATE TABLE `generation_records`  (
-  `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `user_id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  `job_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  `kind` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `model` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `prompt` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `image_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
-  `storage_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
-  `metadata_json` json NULL,
-  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `ix_generation_records_user_id`(`user_id`) USING BTREE,
-  INDEX `ix_generation_records_job_id`(`job_id`) USING BTREE,
-  INDEX `ix_generation_records_kind`(`kind`) USING BTREE,
-  INDEX `ix_generation_records_model`(`model`) USING BTREE,
-  INDEX `ix_generation_records_provider`(`provider`) USING BTREE,
-  INDEX `ix_generation_records_status`(`status`) USING BTREE,
-  INDEX `ix_generation_records_created_at`(`created_at`) USING BTREE,
-  INDEX `ix_generation_records_kind_status`(`kind`, `status`) USING BTREE,
-  CONSTRAINT `fk_generation_records_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Records of generation_records
--- ----------------------------
-INSERT INTO `generation_records` VALUES ('14961a71-517c-4eb0-a67d-9b46ae3e9eba', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', '/api/v1/assets/content?storage_url=oss%3A%2F%2Foss-pai-r7x5470twdp2bxpuzk-cn-guangzhou%2Fgenerated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F20%2F72ca478a-b738-4c45-a6be-12781dd602f7.jpg', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/20/72ca478a-b738-4c45-a6be-12781dd602f7.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/20/72ca478a-b738-4c45-a6be-12781dd602f7.jpg\", \"negative_prompt\": null, \"source_filename\": \"test1.png\", \"source_image_url\": \"/api/v1/assets/content?storage_url=oss%3A%2F%2Foss-pai-r7x5470twdp2bxpuzk-cn-guangzhou%2Fassets%2Finput%2Fsketch_to_realistic%2F2026%2F04%2F20%2Ftest1_e9291b8d.png&filename=test1.png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/20/test1_e9291b8d.png\"}', '2026-04-20 01:28:15.875697', '2026-04-20 01:28:15.875697');
-INSERT INTO `generation_records` VALUES ('1ddb123f-644f-43a5-8eb9-58595e2d4ce9', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F86acf6b0-51a8-415b-aaed-71cb139ec7f4.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776434719&Signature=ZREjQ%2FfvvnjgkICKJ1zjqENRkdA%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/86acf6b0-51a8-415b-aaed-71cb139ec7f4.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/86acf6b0-51a8-415b-aaed-71cb139ec7f4.jpg\", \"negative_prompt\": null, \"source_filename\": \"QQ20260417-210334.png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-17 13:05:19.772231', '2026-04-17 13:05:19.772231');
-INSERT INTO `generation_records` VALUES ('2f2190e2-4698-4920-b77c-624ac25e33cb', NULL, NULL, 'multi_view', 'Multi-view: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '基于参考图生成四个标准视角：正视、左视、右视、背视。保持各视图在结构、材质、工艺与比例上完全统一，以干净的 2x2 布局呈现，背景为纯白哑光，棚拍光线，细节清晰，不允许出现任何支撑结构。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F98e90f9f-5e4e-4f6e-b703-92121fe58660.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776431641&Signature=qWMoZVKQgeAM18PcKkbNwIeYB54%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/gemini-3.1-flash-image-preview/2026/04/17/98e90f9f-5e4e-4f6e-b703-92121fe58660.jpg', '{\"feature\": \"multi_view\", \"strength\": 0.75, \"object_key\": \"generated/multi_view/gemini-3.1-flash-image-preview/2026/04/17/98e90f9f-5e4e-4f6e-b703-92121fe58660.jpg\", \"negative_prompt\": null, \"source_filename\": \"generated_sketch_to_realistic_gemini-3.1-flash-image-preview_2026_04_17_198285f4-2cd4-4e5e-ba8e-79be2fbbed23.jpg\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-17 12:14:01.360000', '2026-04-17 12:14:01.360000');
-INSERT INTO `generation_records` VALUES ('33d1337a-0293-4952-8b03-78cb60409dc7', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2Fcc37c4ee-8e99-43b8-85be-f7df7ab28018.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776592574&Signature=EtdhoIPW8fgQcqO%2FSfmqznlGpgY%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/cc37c4ee-8e99-43b8-85be-f7df7ab28018.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/cc37c4ee-8e99-43b8-85be-f7df7ab28018.jpg\", \"negative_prompt\": null, \"source_filename\": \"test1.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fsketch_to_realistic%2F2026%2F04%2F19%2Ftest1_dd79d740.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776592553&Signature=sUHwaWDFFrbGD9jOXGqn%2FC%2B1HOM%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test1_dd79d740.png\"}', '2026-04-19 08:56:14.994235', '2026-04-19 08:56:14.994235');
-INSERT INTO `generation_records` VALUES ('34c106df-8724-4169-92da-bffb4daec9f7', NULL, NULL, 'grayscale_relief', 'Grayscale relief: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '严格保留参考图的结构、比例与雕塑细节，将其渲染为哑光灰度泥模效果。不要金属反光，不要宝石折射，仅保留轻微 AO 阴影，背景为深色哑光，整体呈现清晰的拓扑感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fgrayscale_relief%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F05b18be7-87b2-4aa2-9e7e-a278fb407161.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776431715&Signature=QBGlMMvF%2BK2e5mh%2F3Ypq%2FqoBBJk%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/grayscale_relief/gemini-3.1-flash-image-preview/2026/04/17/05b18be7-87b2-4aa2-9e7e-a278fb407161.jpg', '{\"feature\": \"grayscale_relief\", \"strength\": 0.75, \"object_key\": \"generated/grayscale_relief/gemini-3.1-flash-image-preview/2026/04/17/05b18be7-87b2-4aa2-9e7e-a278fb407161.jpg\", \"negative_prompt\": null, \"source_filename\": \"generated_multi_view_gemini-3.1-flash-image-preview_2026_04_17_98e90f9f-5e4e-4f6e-b703-92121fe58660.jpg\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-17 12:15:15.631928', '2026-04-17 12:15:15.631928');
-INSERT INTO `generation_records` VALUES ('3ce762e1-0b8f-4805-9747-51f8d9e56314', NULL, NULL, 'multi_view', 'Multi-view: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '基于参考图生成四个标准视角：正视、左视、右视、背视。保持各视图在结构、材质、工艺与比例上完全统一，以干净的 2x2 布局呈现，背景为纯白哑光，棚拍光线，细节清晰，不允许出现任何支撑结构。', '/api/v1/assets/content?storage_url=oss%3A%2F%2Foss-pai-r7x5470twdp2bxpuzk-cn-guangzhou%2Fgenerated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F20%2F72249df1-10f1-4ac2-880d-6dc71b625245.jpg', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/gemini-3.1-flash-image-preview/2026/04/20/72249df1-10f1-4ac2-880d-6dc71b625245.jpg', '{\"feature\": \"multi_view\", \"strength\": 0.75, \"object_key\": \"generated/multi_view/gemini-3.1-flash-image-preview/2026/04/20/72249df1-10f1-4ac2-880d-6dc71b625245.jpg\", \"negative_prompt\": null, \"source_filename\": \"QQ20260420-094903.png\", \"source_image_url\": \"/api/v1/assets/content?storage_url=oss%3A%2F%2Foss-pai-r7x5470twdp2bxpuzk-cn-guangzhou%2Fassets%2Finput%2Fmulti_view%2F2026%2F04%2F20%2FQQ20260420-094903_dcafbfc2.png&filename=QQ20260420-094903.png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/20/QQ20260420-094903_dcafbfc2.png\"}', '2026-04-20 01:51:39.886494', '2026-04-20 01:51:39.886494');
-INSERT INTO `generation_records` VALUES ('51398e6c-75c3-4543-b7e3-7d105243092f', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F572d524f-7033-4a28-a32c-4833c71b5961.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776591184&Signature=41LdnLuQGGWmAdXy2%2BOn%2Fv8Q0Bc%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/572d524f-7033-4a28-a32c-4833c71b5961.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/572d524f-7033-4a28-a32c-4833c71b5961.jpg\", \"negative_prompt\": null, \"source_filename\": \"test4.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fsketch_to_realistic%2F2026%2F04%2F19%2Ftest4_fa3160c7.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776591160&Signature=dM1QpBB0Wg%2Fc6KWyg7QoiRancLc%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test4_fa3160c7.png\"}', '2026-04-19 08:33:04.111755', '2026-04-19 08:33:04.111755');
-INSERT INTO `generation_records` VALUES ('578e6e42-4075-4cb8-baf1-27c9b23a8e99', NULL, NULL, 'fusion', 'Fusion: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '把主图中间的玉石换成另一张参考图的玉石，主图的外框需要贴合另一张参考图的玉石轮廓，无缝贴合', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Ffusion%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F18%2F5500cd3c-01f6-425d-99f3-12e81f512e0a.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776484623&Signature=xWfZupFKXwfIdq4jXgl5Q4lBTsc%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/fusion/gemini-3.1-flash-image-preview/2026/04/18/5500cd3c-01f6-425d-99f3-12e81f512e0a.jpg', '{\"mode\": \"balanced\", \"strength\": 0.75, \"filenames\": [\"1.jpg\", \"2.jpg\"], \"object_key\": \"generated/fusion/gemini-3.1-flash-image-preview/2026/04/18/5500cd3c-01f6-425d-99f3-12e81f512e0a.jpg\", \"image_count\": 2, \"negative_prompt\": null, \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"primary_image_index\": 0}', '2026-04-18 02:57:03.333477', '2026-04-18 02:57:03.333477');
-INSERT INTO `generation_records` VALUES ('59200b60-1928-4cd0-a1d0-0be9904c38bf', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F1162affd-c491-4ca9-8f02-5ba1338e95ce.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776595219&Signature=cntiEtjRse8Eax78useSYZDX6Lo%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/1162affd-c491-4ca9-8f02-5ba1338e95ce.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/1162affd-c491-4ca9-8f02-5ba1338e95ce.jpg\", \"negative_prompt\": null, \"source_filename\": \"test2.jpg\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fsketch_to_realistic%2F2026%2F04%2F19%2Ftest2_a79b513e.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776595193&Signature=vwQqmrGmNVfIyXxrXY0t8k35uHw%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test2_a79b513e.jpg\"}', '2026-04-19 09:40:19.477489', '2026-04-19 09:40:19.477489');
-INSERT INTO `generation_records` VALUES ('65f85408-f3d7-48be-a828-442894a7642a', NULL, NULL, 'multi_view', 'Multi-view: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '基于参考图生成四个标准视角：正视、左视、右视、背视。保持各视图在结构、材质、工艺与比例上完全统一，以干净的 2x2 布局呈现，背景为纯白哑光，棚拍光线，细节清晰，不允许出现任何支撑结构。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F01580ebf-44eb-46b6-a1f2-c31cc2b31317.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776435933&Signature=Ab6xhSJVu7n6E6heZJJSPTJGzvA%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/gemini-3.1-flash-image-preview/2026/04/17/01580ebf-44eb-46b6-a1f2-c31cc2b31317.jpg', '{\"feature\": \"multi_view\", \"strength\": 0.75, \"object_key\": \"generated/multi_view/gemini-3.1-flash-image-preview/2026/04/17/01580ebf-44eb-46b6-a1f2-c31cc2b31317.jpg\", \"negative_prompt\": null, \"source_filename\": \"generated_sketch_to_realistic_gemini-3.1-flash-image-preview_2026_04_17_24cfdec3-333a-416a-b119-1e4225e6cd74.jpg\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-17 13:25:33.608991', '2026-04-17 13:25:33.608991');
-INSERT INTO `generation_records` VALUES ('699fa217-abe3-4438-8692-b80dfc591214', NULL, NULL, 'multi_view', 'Multi-view split', 'gemini-3.1-flash-image-preview', 'system', 'completed', 'Split four-grid multi-view image into separate view assets.', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Ffront%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F3e4b4d7d-9a6e-4954-a79c-7f9ec400f0c8.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348224&Signature=AH9WtJFg1Q6QBY9gtkCIWtmIaSg%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/front/gemini-3.1-flash-image-preview/2026/04/16/3e4b4d7d-9a6e-4954-a79c-7f9ec400f0c8.png', '{\"items\": [{\"view\": \"front\", \"width\": 512, \"height\": 512, \"image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Ffront%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F3e4b4d7d-9a6e-4954-a79c-7f9ec400f0c8.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348224&Signature=AH9WtJFg1Q6QBY9gtkCIWtmIaSg%3D\", \"storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/front/gemini-3.1-flash-image-preview/2026/04/16/3e4b4d7d-9a6e-4954-a79c-7f9ec400f0c8.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F7c38fc6c-827b-4145-9833-d75af0051476.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348133&Signature=tccrdu7YY0ePitSfGaFWFDwD6%2BQ%3D\"}, {\"view\": \"side\", \"width\": 512, \"height\": 512, \"image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fside%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2Fc782c736-b108-477f-b96f-44131c1d79b2.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348225&Signature=r0bBRhBFY%2BcXI2dBIvZ7tmGPkPk%3D\", \"storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/side/gemini-3.1-flash-image-preview/2026/04/16/c782c736-b108-477f-b96f-44131c1d79b2.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F7c38fc6c-827b-4145-9833-d75af0051476.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348133&Signature=tccrdu7YY0ePitSfGaFWFDwD6%2BQ%3D\"}, {\"view\": \"top\", \"width\": 512, \"height\": 512, \"image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Ftop%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2Fe49ce7ff-d2ea-4883-942e-81c622458142.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348225&Signature=THD7Fv0GJDCxNuV4yMF3h071cjs%3D\", \"storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/top/gemini-3.1-flash-image-preview/2026/04/16/e49ce7ff-d2ea-4883-942e-81c622458142.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F7c38fc6c-827b-4145-9833-d75af0051476.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348133&Signature=tccrdu7YY0ePitSfGaFWFDwD6%2BQ%3D\"}, {\"view\": \"back\", \"width\": 512, \"height\": 512, \"image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fback%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F924bf3b3-67d5-4551-a7fc-8d56323dc2f7.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348225&Signature=miEjxvtMTEuboJCZZ7fo0QZixsc%3D\", \"storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/back/gemini-3.1-flash-image-preview/2026/04/16/924bf3b3-67d5-4551-a7fc-8d56323dc2f7.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F7c38fc6c-827b-4145-9833-d75af0051476.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348133&Signature=tccrdu7YY0ePitSfGaFWFDwD6%2BQ%3D\"}], \"gap_x_ratio\": 0.0, \"gap_y_ratio\": 0.0, \"split_x_ratio\": 0.5, \"split_y_ratio\": 0.5, \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F7c38fc6c-827b-4145-9833-d75af0051476.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776348133&Signature=tccrdu7YY0ePitSfGaFWFDwD6%2BQ%3D\"}', '2026-04-16 13:03:45.696914', '2026-04-16 13:03:45.696914');
-INSERT INTO `generation_records` VALUES ('71fa8f8a-49b4-40e1-8d6d-003bf968c813', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F50dc6347-d9d1-4bcf-a1be-31503a12e712.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776591896&Signature=HEtXtdrFefp8x%2Fg31FC%2FLN6B5rs%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/50dc6347-d9d1-4bcf-a1be-31503a12e712.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/50dc6347-d9d1-4bcf-a1be-31503a12e712.jpg\", \"negative_prompt\": null, \"source_filename\": \"test4.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fsketch_to_realistic%2F2026%2F04%2F19%2Ftest4_660dc0da.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776591878&Signature=%2B8sZ1dNTa2XZ%2Fpxt4OduLGYHaeY%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test4_660dc0da.png\"}', '2026-04-19 08:44:56.075488', '2026-04-19 08:44:56.075488');
-INSERT INTO `generation_records` VALUES ('72b2fa29-662d-455a-81ba-832509d142f2', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F24cfdec3-333a-416a-b119-1e4225e6cd74.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776435829&Signature=Idj4Lc05gqSNtWuFIPvbU%2FOsWSQ%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/24cfdec3-333a-416a-b119-1e4225e6cd74.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/24cfdec3-333a-416a-b119-1e4225e6cd74.jpg\", \"negative_prompt\": null, \"source_filename\": \"QQ20260417-212220.png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-17 13:23:49.388592', '2026-04-17 13:23:49.388592');
-INSERT INTO `generation_records` VALUES ('7cd2e29e-b7a4-47ba-abaf-b3659aa39529', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F198285f4-2cd4-4e5e-ba8e-79be2fbbed23.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776431569&Signature=WmOZ3WFbHVduEDv%2Bs2A4FnEazKE%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/198285f4-2cd4-4e5e-ba8e-79be2fbbed23.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/198285f4-2cd4-4e5e-ba8e-79be2fbbed23.jpg\", \"negative_prompt\": null, \"source_filename\": \"28d480fba255619a37a028d2bd364bd4.jpg\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-17 12:12:49.323723', '2026-04-17 12:12:49.323723');
-INSERT INTO `generation_records` VALUES ('83734619-db76-4064-953e-2e56afb013ce', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F4055d9d3-181b-4671-8b75-dd04495af7ed.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776594419&Signature=vAZloFb0PWxQhJwTDOK7jeMpgvQ%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/4055d9d3-181b-4671-8b75-dd04495af7ed.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/4055d9d3-181b-4671-8b75-dd04495af7ed.jpg\", \"negative_prompt\": null, \"source_filename\": \"test4.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fsketch_to_realistic%2F2026%2F04%2F19%2Ftest4_8540a226.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776594395&Signature=hnJcjxIyeFg56uIQOVy4UsU3WPk%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test4_8540a226.png\"}', '2026-04-19 09:26:59.686633', '2026-04-19 09:26:59.686633');
-INSERT INTO `generation_records` VALUES ('9262c965-8250-4156-8597-599458477656', NULL, NULL, 'text_to_image', 'Text-to-image: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '做一个镶金边的翡翠戒指，冰种，微裂，缅甸矿', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Ftext_to_image%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2Ff4f8116f-8cc1-4a18-9031-8779287a901c.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776428086&Signature=OcQcekvT%2Bfwet5xsT0YuMM09phQ%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/text_to_image/gemini-3.1-flash-image-preview/2026/04/17/f4f8116f-8cc1-4a18-9031-8779287a901c.jpg', '{\"image_size\": \"1K\", \"object_key\": \"generated/text_to_image/gemini-3.1-flash-image-preview/2026/04/17/f4f8116f-8cc1-4a18-9031-8779287a901c.jpg\", \"aspect_ratio\": \"1:1\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-17 11:14:46.175082', '2026-04-17 11:14:46.175082');
-INSERT INTO `generation_records` VALUES ('98b4e3d9-be30-49a9-8f7b-62f6230e41f6', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F092fe4f2-787d-415e-b757-748df8135a0a.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776434821&Signature=V4FTJaFk92wtKIKnnLAfHBp%2FFy0%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/092fe4f2-787d-415e-b757-748df8135a0a.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/092fe4f2-787d-415e-b757-748df8135a0a.jpg\", \"negative_prompt\": null, \"source_filename\": \"QQ20260417-210334.png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-17 13:07:01.103529', '2026-04-17 13:07:01.103529');
-INSERT INTO `generation_records` VALUES ('9f991ef4-f124-45ad-8762-f0de86ce968b', NULL, NULL, 'text_to_image', 'Text-to-image: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '爱德华风格戒指，18K玫瑰金，心形切割红宝石作为主石，六爪镶嵌，戒臂带有莲花浮雕纹样，金属表面为缎面处理，边缘排布微镶钻石，戒肩有花丝工艺细节，高级珠宝产品渲染效果，背景干净，金属光泽真实，工艺细节清晰。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Ftext_to_image%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F6025a47f-a088-4181-8199-a0edf1650d4e.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776337492&Signature=m0%2F90%2FIJHfzikTuq4THaPQMsd1M%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/text_to_image/gemini-3.1-flash-image-preview/2026/04/16/6025a47f-a088-4181-8199-a0edf1650d4e.jpg', '{\"image_size\": \"1K\", \"object_key\": \"generated/text_to_image/gemini-3.1-flash-image-preview/2026/04/16/6025a47f-a088-4181-8199-a0edf1650d4e.jpg\", \"aspect_ratio\": \"1:1\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-16 10:04:52.433151', '2026-04-16 10:04:52.433151');
-INSERT INTO `generation_records` VALUES ('a919cea7-92a6-4590-939a-bca84f4dd4c4', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F8851a973-d72a-4ed7-8af6-811db200e53f.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776591349&Signature=83%2FHfh6J4hvYaW2PyN1wUXHfCuI%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/8851a973-d72a-4ed7-8af6-811db200e53f.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/8851a973-d72a-4ed7-8af6-811db200e53f.jpg\", \"negative_prompt\": null, \"source_filename\": \"test2.jpg\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fsketch_to_realistic%2F2026%2F04%2F19%2Ftest2_2af9aea4.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776591328&Signature=Zgjo7DDYAb9gpcYZfSWH4%2FG8frA%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test2_2af9aea4.jpg\"}', '2026-04-19 08:35:49.233267', '2026-04-19 08:35:49.233267');
-INSERT INTO `generation_records` VALUES ('ab2b7340-3304-44e7-ad6a-a7ca8cebbf83', NULL, NULL, 'multi_view_split', 'Multi-view split', 'multi_view_split', 'system', 'completed', 'Split four-grid multi-view image into separate view assets.', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Ffront%2Fmulti_view_split%2F2026%2F04%2F19%2F0fb10ebe-47bb-467f-8972-c54f11d28584.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597893&Signature=ExR7BJDiob9vcNFIeQ11IGUPF4g%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/front/multi_view_split/2026/04/19/0fb10ebe-47bb-467f-8972-c54f11d28584.png', '{\"items\": [{\"view\": \"front\", \"width\": 512, \"height\": 512, \"image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Ffront%2Fmulti_view_split%2F2026%2F04%2F19%2F0fb10ebe-47bb-467f-8972-c54f11d28584.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597893&Signature=ExR7BJDiob9vcNFIeQ11IGUPF4g%3D\", \"storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/front/multi_view_split/2026/04/19/0fb10ebe-47bb-467f-8972-c54f11d28584.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F9ad2dba5-36ef-47b2-a3ce-3fac5492cc72.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597832&Signature=FVm4GWEMT9rlZZ9RkfM5P6LO6pY%3D\"}, {\"view\": \"side\", \"width\": 512, \"height\": 512, \"image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fside%2Fmulti_view_split%2F2026%2F04%2F19%2Fb545b34e-ec04-495c-bf2e-34c1abbc8218.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597893&Signature=iTQ3EClVIBxATZFxOXM5M8M6cw8%3D\", \"storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/side/multi_view_split/2026/04/19/b545b34e-ec04-495c-bf2e-34c1abbc8218.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F9ad2dba5-36ef-47b2-a3ce-3fac5492cc72.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597832&Signature=FVm4GWEMT9rlZZ9RkfM5P6LO6pY%3D\"}, {\"view\": \"top\", \"width\": 512, \"height\": 512, \"image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Ftop%2Fmulti_view_split%2F2026%2F04%2F19%2Feeebb2dc-10a4-4a50-aa75-89d516cd8c1a.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597893&Signature=zHJfqbOECrlkuCyPcsxVEGVVRj0%3D\", \"storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/top/multi_view_split/2026/04/19/eeebb2dc-10a4-4a50-aa75-89d516cd8c1a.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F9ad2dba5-36ef-47b2-a3ce-3fac5492cc72.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597832&Signature=FVm4GWEMT9rlZZ9RkfM5P6LO6pY%3D\"}, {\"view\": \"back\", \"width\": 512, \"height\": 512, \"image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fback%2Fmulti_view_split%2F2026%2F04%2F19%2F17eca273-633a-4b08-b7ef-ac03fed87537.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597894&Signature=tpccN22RridP2K%2BJEneAR29419M%3D\", \"storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/back/multi_view_split/2026/04/19/17eca273-633a-4b08-b7ef-ac03fed87537.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F9ad2dba5-36ef-47b2-a3ce-3fac5492cc72.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597832&Signature=FVm4GWEMT9rlZZ9RkfM5P6LO6pY%3D\"}], \"gap_x_ratio\": 0.0, \"gap_y_ratio\": 0.0, \"split_x_ratio\": 0.5, \"split_y_ratio\": 0.5, \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F9ad2dba5-36ef-47b2-a3ce-3fac5492cc72.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776597832&Signature=FVm4GWEMT9rlZZ9RkfM5P6LO6pY%3D\"}', '2026-04-19 10:24:54.203146', '2026-04-19 10:24:54.203146');
-INSERT INTO `generation_records` VALUES ('b812f2cd-e60c-42c1-8082-e516f3a159c2', NULL, NULL, 'grayscale_relief', 'Grayscale relief: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '严格保留参考图的结构、比例与雕塑细节，将其渲染为哑光灰度泥模效果。不要金属反光，不要宝石折射，仅保留轻微 AO 阴影，背景为深色哑光，整体呈现清晰的拓扑感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fgrayscale_relief%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2Fb55a6acd-5937-4d81-8493-2e21d8e484e3.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776598836&Signature=YG5TSC%2F1nBjZJclYEMyhP9dotq8%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/grayscale_relief/gemini-3.1-flash-image-preview/2026/04/19/b55a6acd-5937-4d81-8493-2e21d8e484e3.jpg', '{\"feature\": \"grayscale_relief\", \"strength\": 0.75, \"object_key\": \"generated/grayscale_relief/gemini-3.1-flash-image-preview/2026/04/19/b55a6acd-5937-4d81-8493-2e21d8e484e3.jpg\", \"negative_prompt\": null, \"source_filename\": \"persisted-e9057609-415d-452d-ba87-020eeb9f2434.jpeg\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fgrayscale_relief%2F2026%2F04%2F19%2Fpersisted-e9057609-415d-452d-ba87-020eeb9f2434_1a84c2de.jpeg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776598821&Signature=2DGDenxyZCGTNTlODUQuhcS1QcY%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/grayscale_relief/2026/04/19/persisted-e9057609-415d-452d-ba87-020eeb9f2434_1a84c2de.jpeg\"}', '2026-04-19 10:40:36.434313', '2026-04-19 10:40:36.434313');
-INSERT INTO `generation_records` VALUES ('d7ee8fff-1197-49bb-9e53-282cc6fe1527', NULL, NULL, 'multi_view', 'Multi-view: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '基于参考图生成四个标准视角：正视、左视、右视、背视。保持各视图在结构、材质、工艺与比例上完全统一，以干净的 2x2 布局呈现，背景为纯白哑光，棚拍光线，细节清晰，不允许出现任何支撑结构。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F7c38fc6c-827b-4145-9833-d75af0051476.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776347715&Signature=azF063no4yGnX7Tc%2FPtEBQnxjYA%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/gemini-3.1-flash-image-preview/2026/04/16/7c38fc6c-827b-4145-9833-d75af0051476.jpg', '{\"feature\": \"multi_view\", \"strength\": 0.75, \"object_key\": \"generated/multi_view/gemini-3.1-flash-image-preview/2026/04/16/7c38fc6c-827b-4145-9833-d75af0051476.jpg\", \"negative_prompt\": null, \"source_filename\": \"gemini-3.1-flash-image-preview (nano-banana-2)_a_严格遵循输入草图的线条、比例和结构。不得 (1).png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-16 12:55:15.411661', '2026-04-16 12:55:15.411661');
-INSERT INTO `generation_records` VALUES ('d956af69-a26b-4a52-bc4f-ccb2efc38f23', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F7c14b17a-7746-4ee3-8516-d33622967e48.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776337895&Signature=qaJwHzQoadQ%2BKqINutprY6Zh4q0%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/16/7c14b17a-7746-4ee3-8516-d33622967e48.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/16/7c14b17a-7746-4ee3-8516-d33622967e48.jpg\", \"negative_prompt\": null, \"source_filename\": \"test5.jpg\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-16 10:11:35.324401', '2026-04-16 10:11:35.324401');
-INSERT INTO `generation_records` VALUES ('e07737f0-63a6-4e76-bdd7-49b9c5fd1483', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F019a4a36-1c6f-4213-91bf-0a22a5cf3db7.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776593152&Signature=4P2GTm7nU%2FQl0wCfQ4b1LtkEWSA%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/019a4a36-1c6f-4213-91bf-0a22a5cf3db7.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/019a4a36-1c6f-4213-91bf-0a22a5cf3db7.jpg\", \"negative_prompt\": null, \"source_filename\": \"test3.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fsketch_to_realistic%2F2026%2F04%2F19%2Ftest3_15d9ef4e.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776593118&Signature=%2FzjxwcqKoRP6UCN%2FngxDQ5Rt9hU%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/test3_15d9ef4e.png\"}', '2026-04-19 09:05:53.000091', '2026-04-19 09:05:53.000091');
-INSERT INTO `generation_records` VALUES ('e77a0bc9-03c2-4ce9-a742-d46a93d74273', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F0a33e8f7-8cb7-49da-b4a8-e66fa7c5c005.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776434772&Signature=EW9KrZ%2Bn10XuBfSZC%2Brl%2FYYPVDY%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/0a33e8f7-8cb7-49da-b4a8-e66fa7c5c005.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/0a33e8f7-8cb7-49da-b4a8-e66fa7c5c005.jpg\", \"negative_prompt\": null, \"source_filename\": \"QQ20260417-210334.png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}', '2026-04-17 13:06:12.195544', '2026-04-17 13:06:12.195544');
-INSERT INTO `generation_records` VALUES ('e9057609-415d-452d-ba87-020eeb9f2434', NULL, NULL, 'multi_view', 'Multi-view: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '基于参考图生成四个标准视角：正视、左视、右视、背视。保持各视图在结构、材质、工艺与比例上完全统一，以干净的 2x2 布局呈现，背景为纯白哑光，棚拍光线，细节清晰，不允许出现任何支撑结构。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2F9ad2dba5-36ef-47b2-a3ce-3fac5492cc72.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776596051&Signature=uZ29uv0Oh3nvl%2FTQoyYmEJYIcr8%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/gemini-3.1-flash-image-preview/2026/04/19/9ad2dba5-36ef-47b2-a3ce-3fac5492cc72.jpg', '{\"feature\": \"multi_view\", \"strength\": 0.75, \"object_key\": \"generated/multi_view/gemini-3.1-flash-image-preview/2026/04/19/9ad2dba5-36ef-47b2-a3ce-3fac5492cc72.jpg\", \"negative_prompt\": null, \"source_filename\": \"session-sketch_to_realistic-1776591619504.jpeg\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fmulti_view%2F2026%2F04%2F19%2Fsession-sketch_to_realistic-1776591619504_5e0b6fd3.jpeg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776596033&Signature=Z6C8PMOqx0OSQdLluRNRJJ8rskU%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/19/session-sketch_to_realistic-1776591619504_5e0b6fd3.jpeg\"}', '2026-04-19 09:54:11.621808', '2026-04-19 09:54:11.621808');
-INSERT INTO `generation_records` VALUES ('fd940778-4541-4ec5-9f0f-eec76a5b9bdb', NULL, NULL, 'sketch_to_realistic', 'Sketch to realistic: Nano Banana 2', 'gemini-3.1-flash-image-preview', 'gemini', 'completed', '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。', 'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F19%2Fb37e1e9d-b3f3-4c35-9788-4999b2eb8ec2.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776595091&Signature=A5lmH4r7Y2stolVTNiJNXWbcdig%3D', 'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/b37e1e9d-b3f3-4c35-9788-4999b2eb8ec2.jpg', '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/19/b37e1e9d-b3f3-4c35-9788-4999b2eb8ec2.jpg\", \"negative_prompt\": null, \"source_filename\": \"QQ20260417-210334.png\", \"source_image_url\": \"https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/assets%2Finput%2Fsketch_to_realistic%2F2026%2F04%2F19%2FQQ20260417-210334_15591d75.png?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776595074&Signature=cICbdm5jBynCpiKd3bSROaUkXjg%3D\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/QQ20260417-210334_15591d75.png\"}', '2026-04-19 09:38:11.984962', '2026-04-19 09:38:11.984962');
-
--- ----------------------------
--- Table structure for users
--- ----------------------------
 DROP TABLE IF EXISTS `users`;
-CREATE TABLE `users`  (
-  `id` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `username` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `display_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  `password_hash` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
-  `is_disabled` tinyint(0) NOT NULL DEFAULT 0 COMMENT '0=enabled,1=disabled',
+DROP TABLE IF EXISTS `schema_migrations`;
+
+CREATE TABLE `schema_migrations` (
+  `version` varchar(64) NOT NULL,
+  `applied_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `users` (
+  `id` varchar(36) NOT NULL,
+  `username` varchar(64) NOT NULL,
+  `role` varchar(32) NOT NULL DEFAULT 'user',
+  `display_name` varchar(128) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `password_hash` text DEFAULT NULL,
+  `is_disabled` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0=enabled,1=disabled',
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_users_username`(`username`) USING BTREE,
-  UNIQUE INDEX `uk_users_email`(`email`) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_users_username` (`username`),
+  UNIQUE KEY `uk_users_email` (`email`),
+  KEY `ix_users_role` (`role`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ----------------------------
--- Records of users
--- ----------------------------
-INSERT INTO `users` VALUES ('00000000-0000-0000-0000-000000000001', 'admin', '系统管理员', 'admin@example.com', NULL, 0, '2026-04-16 15:43:47.270909', '2026-04-16 15:43:47.270909');
+CREATE TABLE `generation_records` (
+  `id` varchar(36) NOT NULL,
+  `user_id` varchar(36) DEFAULT NULL,
+  `job_id` varchar(128) DEFAULT NULL,
+  `kind` varchar(64) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `model` varchar(128) NOT NULL,
+  `provider` varchar(64) NOT NULL,
+  `status` varchar(64) NOT NULL,
+  `prompt` longtext NOT NULL,
+  `image_url` text DEFAULT NULL,
+  `storage_url` text DEFAULT NULL,
+  `metadata_json` longtext DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `ix_generation_records_user_id` (`user_id`),
+  KEY `ix_generation_records_job_id` (`job_id`),
+  KEY `ix_generation_records_kind` (`kind`),
+  KEY `ix_generation_records_model` (`model`),
+  KEY `ix_generation_records_provider` (`provider`),
+  KEY `ix_generation_records_status` (`status`),
+  KEY `ix_generation_records_created_at` (`created_at`),
+  KEY `ix_generation_records_kind_status` (`kind`,`status`),
+  CONSTRAINT `fk_generation_records_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `asset_records` (
+  `id` varchar(36) NOT NULL,
+  `user_id` varchar(36) DEFAULT NULL,
+  `owner_user_id` varchar(36) DEFAULT NULL,
+  `name` varchar(255) NOT NULL,
+  `source_kind` varchar(64) NOT NULL,
+  `module_kind` varchar(64) DEFAULT NULL,
+  `visibility` varchar(32) NOT NULL DEFAULT 'private',
+  `storage_url` text NOT NULL,
+  `mime_type` varchar(128) DEFAULT NULL,
+  `file_size` bigint DEFAULT NULL,
+  `metadata_json` longtext DEFAULT NULL,
+  `published_at` datetime(6) DEFAULT NULL,
+  `published_by_user_id` varchar(36) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `ix_asset_records_user_id` (`user_id`),
+  KEY `ix_asset_records_owner_user_id` (`owner_user_id`),
+  KEY `ix_asset_records_source_kind` (`source_kind`),
+  KEY `ix_asset_records_module_kind` (`module_kind`),
+  KEY `ix_asset_records_visibility` (`visibility`),
+  KEY `ix_asset_records_published_by_user_id` (`published_by_user_id`),
+  KEY `ix_asset_records_created_at` (`created_at`),
+  KEY `ix_asset_records_owner_visibility` (`owner_user_id`,`visibility`),
+  CONSTRAINT `asset_records_ibfk_legacy_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `asset_records_ibfk_owner_user` FOREIGN KEY (`owner_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `asset_records_ibfk_published_user` FOREIGN KEY (`published_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `user_module_permissions` (
+  `id` varchar(36) NOT NULL,
+  `user_id` varchar(36) NOT NULL,
+  `module_key` varchar(64) NOT NULL,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ix_user_module_permissions_user_module` (`user_id`,`module_key`),
+  KEY `ix_user_module_permissions_user_id` (`user_id`),
+  KEY `ix_user_module_permissions_module_key` (`module_key`),
+  CONSTRAINT `fk_user_module_permissions_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `users` (
+  `id`,
+  `username`,
+  `role`,
+  `display_name`,
+  `email`,
+  `password_hash`,
+  `is_disabled`,
+  `created_at`,
+  `updated_at`
+) VALUES
+  (
+    '00000000-0000-0000-0000-000000000001',
+    'root',
+    'root',
+    '系统管理员',
+    'root@example.com',
+    'pbkdf2_sha256$T8DpH0njCOv3Wqt6qb9heA==$8uws_BuR-K737PTHytCxoe7K-ncBq90cMRSEwqk2tk4=',
+    0,
+    '2026-04-16 15:43:47.270909',
+    '2026-04-20 12:00:00.000000'
+  );
+
+INSERT INTO `user_module_permissions` (`id`, `user_id`, `module_key`, `is_enabled`)
+VALUES
+  ('root-t2i', '00000000-0000-0000-0000-000000000001', 'text_to_image', 1),
+  ('root-fusion', '00000000-0000-0000-0000-000000000001', 'multi_image_fusion', 1),
+  ('root-edit', '00000000-0000-0000-0000-000000000001', 'image_edit', 1),
+  ('root-product-refine', '00000000-0000-0000-0000-000000000001', 'product_refine', 1),
+  ('root-gemstone-design', '00000000-0000-0000-0000-000000000001', 'gemstone_design', 1),
+  ('root-upscale', '00000000-0000-0000-0000-000000000001', 'upscale', 1),
+  ('root-mview', '00000000-0000-0000-0000-000000000001', 'multi_view', 1),
+  ('root-msplit', '00000000-0000-0000-0000-000000000001', 'multi_view_split', 1),
+  ('root-gray', '00000000-0000-0000-0000-000000000001', 'grayscale_relief', 1),
+  ('root-asset', '00000000-0000-0000-0000-000000000001', 'asset_management', 1),
+  ('root-history', '00000000-0000-0000-0000-000000000001', 'history', 1);
+
+/*
+  Curated real assets migrated from jinma_old.sql.
+  All are assigned to root and published into the community library.
+*/
+INSERT INTO `asset_records` (
+  `id`,
+  `user_id`,
+  `owner_user_id`,
+  `name`,
+  `source_kind`,
+  `module_kind`,
+  `visibility`,
+  `storage_url`,
+  `mime_type`,
+  `file_size`,
+  `metadata_json`,
+  `published_at`,
+  `published_by_user_id`,
+  `created_at`,
+  `updated_at`
+) VALUES
+  (
+    '7acefe39-7850-4637-ad2f-40b2553e77fe',
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'gemini-3.1-flash-image-preview (nano-banana-2)_a_严格遵循输入草图的线条、比例和结构。不得 (1).png',
+    'input_upload',
+    'multi_view',
+    'community',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/16/gemini-3.1-flash-image-preview__nano-banana-2__a_______________________1__4895b38e.png',
+    'image/png',
+    1446248,
+    '{\"feature\": \"multi_view\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"gemini-3.1-flash-image-preview (nano-banana-2)_a_严格遵循输入草图的线条、比例和结构。不得 (1).png\"}',
+    '2026-04-16 12:54:46.000000',
+    '00000000-0000-0000-0000-000000000001',
+    '2026-04-16 12:54:46.000000',
+    '2026-04-16 12:54:46.000000'
+  ),
+  (
+    'ab794bbd-4c4a-4bce-a2b1-a7a33aae980e',
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    '28d480fba255619a37a028d2bd364bd4.jpg',
+    'input_upload',
+    'sketch_to_realistic',
+    'community',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/17/28d480fba255619a37a028d2bd364bd4_04f6c5bc.jpg',
+    'image/jpeg',
+    160570,
+    '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"28d480fba255619a37a028d2bd364bd4.jpg\"}',
+    '2026-04-17 12:12:26.000000',
+    '00000000-0000-0000-0000-000000000001',
+    '2026-04-17 12:12:26.000000',
+    '2026-04-17 12:12:26.000000'
+  ),
+  (
+    '1d8673ab-adc2-464c-acf0-19ab28c9600f',
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'QQ20260417-212220.png',
+    'input_upload',
+    'sketch_to_realistic',
+    'community',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/17/QQ20260417-212220_9421d652.png',
+    'image/png',
+    468878,
+    '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"QQ20260417-212220.png\"}',
+    '2026-04-17 13:23:25.000000',
+    '00000000-0000-0000-0000-000000000001',
+    '2026-04-17 13:23:25.000000',
+    '2026-04-17 13:23:25.000000'
+  ),
+  (
+    '03b58df5-63fb-4b1c-8795-0af3356f9f66',
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    '1.jpg',
+    'input_upload',
+    'fusion',
+    'community',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/fusion/2026/04/18/1_38853d2e.jpg',
+    'image/jpeg',
+    168957,
+    '{\"feature\": \"fusion\", \"model\": \"gemini-3.1-flash-image-preview\", \"primary_image_index\": 0}',
+    '2026-04-18 02:56:46.000000',
+    '00000000-0000-0000-0000-000000000001',
+    '2026-04-18 02:56:46.000000',
+    '2026-04-18 02:56:46.000000'
+  ),
+  (
+    '6db508c2-b97f-4a41-969f-207dcb80af9f',
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    '2.jpg',
+    'input_upload',
+    'fusion',
+    'community',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/fusion/2026/04/18/2_6eb6aa3a.jpg',
+    'image/jpeg',
+    1779129,
+    '{\"feature\": \"fusion\", \"model\": \"gemini-3.1-flash-image-preview\", \"primary_image_index\": 0}',
+    '2026-04-18 02:56:47.000000',
+    '00000000-0000-0000-0000-000000000001',
+    '2026-04-18 02:56:47.000000',
+    '2026-04-18 02:56:47.000000'
+  ),
+  (
+    '0a50f8ea-93cc-4c06-af8f-079510d9c217',
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'QQ20260417-210334.png',
+    'input_upload',
+    'sketch_to_realistic',
+    'community',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/sketch_to_realistic/2026/04/19/QQ20260417-210334_15591d75.png',
+    'image/png',
+    82841,
+    '{\"feature\": \"sketch_to_realistic\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"QQ20260417-210334.png\"}',
+    '2026-04-19 09:37:55.000000',
+    '00000000-0000-0000-0000-000000000001',
+    '2026-04-19 09:37:55.000000',
+    '2026-04-19 09:37:55.000000'
+  ),
+  (
+    'ca90a828-c0fc-4de7-b766-840fa82dfd28',
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'QQ20260420-094903.png',
+    'input_upload',
+    'multi_view',
+    'community',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/20/QQ20260420-094903_dcafbfc2.png',
+    'image/png',
+    351742,
+    '{\"feature\": \"multi_view\", \"model\": \"gemini-3.1-flash-image-preview\", \"filename\": \"QQ20260420-094903.png\"}',
+    '2026-04-20 01:51:18.000000',
+    '00000000-0000-0000-0000-000000000001',
+    '2026-04-20 01:51:18.000000',
+    '2026-04-20 01:51:18.000000'
+  );
+
+/*
+  Curated real generation history migrated from jinma_old.sql.
+  All records are rebound to root to avoid anonymous legacy data.
+*/
+INSERT INTO `generation_records` (
+  `id`,
+  `user_id`,
+  `job_id`,
+  `kind`,
+  `title`,
+  `model`,
+  `provider`,
+  `status`,
+  `prompt`,
+  `image_url`,
+  `storage_url`,
+  `metadata_json`,
+  `created_at`,
+  `updated_at`
+) VALUES
+  (
+    '9f991ef4-f124-45ad-8762-f0de86ce968b',
+    '00000000-0000-0000-0000-000000000001',
+    NULL,
+    'text_to_image',
+    'Text-to-image: Nano Banana 2',
+    'gemini-3.1-flash-image-preview',
+    'gemini',
+    'completed',
+    '爱德华风格戒指，18K玫瑰金，心形切割红宝石作为主石，六爪镶嵌，戒臂带有莲花浮雕纹样，金属表面为缎面处理，边缘排布微镶钻石，戒肩有花丝工艺细节，高级珠宝产品渲染效果，背景干净，金属光泽真实，工艺细节清晰。',
+    'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Ftext_to_image%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F6025a47f-a088-4181-8199-a0edf1650d4e.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776337492&Signature=m0%2F90%2FIJHfzikTuq4THaPQMsd1M%3D',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/text_to_image/gemini-3.1-flash-image-preview/2026/04/16/6025a47f-a088-4181-8199-a0edf1650d4e.jpg',
+    '{\"image_size\": \"1K\", \"object_key\": \"generated/text_to_image/gemini-3.1-flash-image-preview/2026/04/16/6025a47f-a088-4181-8199-a0edf1650d4e.jpg\", \"aspect_ratio\": \"1:1\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}',
+    '2026-04-16 10:04:52.433151',
+    '2026-04-16 10:04:52.433151'
+  ),
+  (
+    'd7ee8fff-1197-49bb-9e53-282cc6fe1527',
+    '00000000-0000-0000-0000-000000000001',
+    NULL,
+    'multi_view',
+    'Multi-view: Nano Banana 2',
+    'gemini-3.1-flash-image-preview',
+    'gemini',
+    'completed',
+    '基于参考图生成四个标准视角：正视、左视、右视、背视。保持各视图在结构、材质、工艺与比例上完全统一，以干净的 2x2 布局呈现，背景为纯白哑光，棚拍光线，细节清晰，不允许出现任何支撑结构。',
+    'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F16%2F7c38fc6c-827b-4145-9833-d75af0051476.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776347715&Signature=azF063no4yGnX7Tc%2FPtEBQnxjYA%3D',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/gemini-3.1-flash-image-preview/2026/04/16/7c38fc6c-827b-4145-9833-d75af0051476.jpg',
+    '{\"feature\": \"multi_view\", \"strength\": 0.75, \"object_key\": \"generated/multi_view/gemini-3.1-flash-image-preview/2026/04/16/7c38fc6c-827b-4145-9833-d75af0051476.jpg\", \"negative_prompt\": null, \"source_filename\": \"gemini-3.1-flash-image-preview (nano-banana-2)_a_严格遵循输入草图的线条、比例和结构。不得 (1).png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}',
+    '2026-04-16 12:55:15.411661',
+    '2026-04-16 12:55:15.411661'
+  ),
+  (
+    '9262c965-8250-4156-8597-599458477656',
+    '00000000-0000-0000-0000-000000000001',
+    NULL,
+    'text_to_image',
+    'Text-to-image: Nano Banana 2',
+    'gemini-3.1-flash-image-preview',
+    'gemini',
+    'completed',
+    '做一个镶金边的翡翠戒指，冰种，微裂，缅甸矿',
+    'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Ftext_to_image%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2Ff4f8116f-8cc1-4a18-9031-8779287a901c.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776428086&Signature=OcQcekvT%2Bfwet5xsT0YuMM09phQ%3D',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/text_to_image/gemini-3.1-flash-image-preview/2026/04/17/f4f8116f-8cc1-4a18-9031-8779287a901c.jpg',
+    '{\"image_size\": \"1K\", \"object_key\": \"generated/text_to_image/gemini-3.1-flash-image-preview/2026/04/17/f4f8116f-8cc1-4a18-9031-8779287a901c.jpg\", \"aspect_ratio\": \"1:1\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}',
+    '2026-04-17 11:14:46.175082',
+    '2026-04-17 11:14:46.175082'
+  ),
+  (
+    '7cd2e29e-b7a4-47ba-abaf-b3659aa39529',
+    '00000000-0000-0000-0000-000000000001',
+    NULL,
+    'sketch_to_realistic',
+    'Sketch to realistic: Nano Banana 2',
+    'gemini-3.1-flash-image-preview',
+    'gemini',
+    'completed',
+    '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。',
+    'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F198285f4-2cd4-4e5e-ba8e-79be2fbbed23.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776431569&Signature=WmOZ3WFbHVduEDv%2Bs2A4FnEazKE%3D',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/198285f4-2cd4-4e5e-ba8e-79be2fbbed23.jpg',
+    '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/198285f4-2cd4-4e5e-ba8e-79be2fbbed23.jpg\", \"negative_prompt\": null, \"source_filename\": \"28d480fba255619a37a028d2bd364bd4.jpg\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}',
+    '2026-04-17 12:12:49.323723',
+    '2026-04-17 12:12:49.323723'
+  ),
+  (
+    '1ddb123f-644f-43a5-8eb9-58595e2d4ce9',
+    '00000000-0000-0000-0000-000000000001',
+    NULL,
+    'sketch_to_realistic',
+    'Sketch to realistic: Nano Banana 2',
+    'gemini-3.1-flash-image-preview',
+    'gemini',
+    'completed',
+    '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。',
+    'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F86acf6b0-51a8-415b-aaed-71cb139ec7f4.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776434719&Signature=ZREjQ%2FfvvnjgkICKJ1zjqENRkdA%3D',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/86acf6b0-51a8-415b-aaed-71cb139ec7f4.jpg',
+    '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/86acf6b0-51a8-415b-aaed-71cb139ec7f4.jpg\", \"negative_prompt\": null, \"source_filename\": \"QQ20260417-210334.png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}',
+    '2026-04-17 13:05:19.772231',
+    '2026-04-17 13:05:19.772231'
+  ),
+  (
+    '72b2fa29-662d-455a-81ba-832509d142f2',
+    '00000000-0000-0000-0000-000000000001',
+    NULL,
+    'sketch_to_realistic',
+    'Sketch to realistic: Nano Banana 2',
+    'gemini-3.1-flash-image-preview',
+    'gemini',
+    'completed',
+    '将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。',
+    'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Fsketch_to_realistic%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F17%2F24cfdec3-333a-416a-b119-1e4225e6cd74.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776435829&Signature=Idj4Lc05gqSNtWuFIPvbU%2FOsWSQ%3D',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/24cfdec3-333a-416a-b119-1e4225e6cd74.jpg',
+    '{\"feature\": \"sketch_to_realistic\", \"strength\": 0.75, \"object_key\": \"generated/sketch_to_realistic/gemini-3.1-flash-image-preview/2026/04/17/24cfdec3-333a-416a-b119-1e4225e6cd74.jpg\", \"negative_prompt\": null, \"source_filename\": \"QQ20260417-212220.png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\"}',
+    '2026-04-17 13:23:49.388592',
+    '2026-04-17 13:23:49.388592'
+  ),
+  (
+    '578e6e42-4075-4cb8-baf1-27c9b23a8e99',
+    '00000000-0000-0000-0000-000000000001',
+    NULL,
+    'fusion',
+    'Fusion: Nano Banana 2',
+    'gemini-3.1-flash-image-preview',
+    'gemini',
+    'completed',
+    '把主图中间的玉石换成另一张参考图的玉石，主图的外框需要贴合另一张参考图的玉石轮廓，无缝贴合',
+    'https://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou.oss-cn-guangzhou.aliyuncs.com/generated%2Ffusion%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F18%2F5500cd3c-01f6-425d-99f3-12e81f512e0a.jpg?OSSAccessKeyId=LTAI5tSZXdVgXijE7a5AnbtW&Expires=1776484623&Signature=xWfZupFKXwfIdq4jXgl5Q4lBTsc%3D',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/fusion/gemini-3.1-flash-image-preview/2026/04/18/5500cd3c-01f6-425d-99f3-12e81f512e0a.jpg',
+    '{\"mode\": \"balanced\", \"strength\": 0.75, \"filenames\": [\"1.jpg\", \"2.jpg\"], \"object_key\": \"generated/fusion/gemini-3.1-flash-image-preview/2026/04/18/5500cd3c-01f6-425d-99f3-12e81f512e0a.jpg\", \"image_count\": 2, \"negative_prompt\": null, \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"primary_image_index\": 0}',
+    '2026-04-18 02:57:03.333477',
+    '2026-04-18 02:57:03.333477'
+  ),
+  (
+    '3ce762e1-0b8f-4805-9747-51f8d9e56314',
+    '00000000-0000-0000-0000-000000000001',
+    NULL,
+    'multi_view',
+    'Multi-view: Nano Banana 2',
+    'gemini-3.1-flash-image-preview',
+    'gemini',
+    'completed',
+    '基于参考图生成四个标准视角：正视、左视、右视、背视。保持各视图在结构、材质、工艺与比例上完全统一，以干净的 2x2 布局呈现，背景为纯白哑光，棚拍光线，细节清晰，不允许出现任何支撑结构。',
+    '/api/v1/assets/content?storage_url=oss%3A%2F%2Foss-pai-r7x5470twdp2bxpuzk-cn-guangzhou%2Fgenerated%2Fmulti_view%2Fgemini-3.1-flash-image-preview%2F2026%2F04%2F20%2F72249df1-10f1-4ac2-880d-6dc71b625245.jpg',
+    'oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/generated/multi_view/gemini-3.1-flash-image-preview/2026/04/20/72249df1-10f1-4ac2-880d-6dc71b625245.jpg',
+    '{\"feature\": \"multi_view\", \"strength\": 0.75, \"object_key\": \"generated/multi_view/gemini-3.1-flash-image-preview/2026/04/20/72249df1-10f1-4ac2-880d-6dc71b625245.jpg\", \"negative_prompt\": null, \"source_filename\": \"QQ20260420-094903.png\", \"source_image_url\": \"/api/v1/assets/content?storage_url=oss%3A%2F%2Foss-pai-r7x5470twdp2bxpuzk-cn-guangzhou%2Fassets%2Finput%2Fmulti_view%2F2026%2F04%2F20%2FQQ20260420-094903_dcafbfc2.png&filename=QQ20260420-094903.png\", \"storage_provider\": \"aliyun\", \"upstream_platform\": \"apiyi\", \"source_image_storage_url\": \"oss://oss-pai-r7x5470twdp2bxpuzk-cn-guangzhou/assets/input/multi_view/2026/04/20/QQ20260420-094903_dcafbfc2.png\"}',
+    '2026-04-20 01:51:39.886494',
+    '2026-04-20 01:51:39.886494'
+  );
+
+INSERT INTO `schema_migrations` (`version`, `applied_at`)
+VALUES ('20260420_auth_assets', CURRENT_TIMESTAMP(6));
 
 SET FOREIGN_KEY_CHECKS = 1;

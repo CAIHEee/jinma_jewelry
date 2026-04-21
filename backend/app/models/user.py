@@ -14,6 +14,7 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    role: Mapped[str] = mapped_column(String(32), default="user", nullable=False, index=True)
     display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -31,3 +32,6 @@ class User(Base):
     )
 
     generation_records = relationship("GenerationRecord", back_populates="user")
+    owned_assets = relationship("AssetRecord", foreign_keys="AssetRecord.owner_user_id", back_populates="owner")
+    published_assets = relationship("AssetRecord", foreign_keys="AssetRecord.published_by_user_id", back_populates="publisher")
+    module_permissions = relationship("UserModulePermission", back_populates="user", cascade="all, delete-orphan")

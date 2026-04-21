@@ -1,0 +1,27 @@
+MODULE_KEYS = [
+    "text_to_image",
+    "multi_image_fusion",
+    "image_edit",
+    "product_refine",
+    "gemstone_design",
+    "upscale",
+    "multi_view",
+    "multi_view_split",
+    "grayscale_relief",
+    "asset_management",
+    "history",
+]
+
+MODULE_LABELS = {
+    "text_to_image": "文生图",
+    "multi_image_fusion": "多图融合",
+    "image_edit": "线稿转写实图",
+    "product_refine": "产品精修",
+    "gemstone_design": "裸石设计",
+    "upscale": "高清放大",
+    "multi_view": "生成多视图",
+    "multi_view_split": "多视图切图",
+    "grayscale_relief": "转灰度图",
+    "asset_management": "资产管理",
+    "history": "历史记录",
+}

@@ -1,8 +1,10 @@
 import json
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
+from app.api.deps import require_module
 from app.core.config import get_settings
+from app.models.user import User
 from app.schemas.ai import (
     FusionJobAccepted,
     FusionMode,
@@ -33,8 +35,11 @@ def list_models() -> ModelCatalogResponse:
 
 
 @router.post("/text-to-image", response_model=GenerationResult)
-async def text_to_image(payload: TextToImageRequest) -> GenerationResult:
-    return await service.generate_text_to_image(payload)
+async def text_to_image(
+    payload: TextToImageRequest,
+    current_user: User = Depends(require_module("text_to_image")),
+) -> GenerationResult:
+    return await service.generate_text_to_image(payload, current_user=current_user)
 
 
 @router.post("/reference-image-transform", response_model=GenerationResult)
@@ -47,6 +52,8 @@ async def reference_image_transform(
     source_image_name: str | None = Form(default=None),
     negative_prompt: str | None = Form(default=None),
     strength: float = Form(default=0.75),
+    image_size: str = Form(default="1K"),
+    current_user: User = Depends(require_module("image_edit")),
 ) -> GenerationResult:
     if image is None and not source_image_url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Either image or source_image_url is required.")
@@ -57,9 +64,116 @@ async def reference_image_transform(
         negative_prompt=negative_prompt,
         feature=feature,
         strength=strength,
+        image_size=image_size,
         filename=(image.filename if image else source_image_name) or "reference.png",
     )
-    return await service.transform_reference_image(file=image, metadata=metadata, source_image_url=source_image_url)
+    return await service.transform_reference_image(file=image, metadata=metadata, current_user=current_user, source_image_url=source_image_url)
+
+
+async def _reference_feature_transform(
+    *,
+    image: UploadFile | None,
+    prompt: str,
+    model: str,
+    feature: str,
+    source_image_url: str | None,
+    source_image_name: str | None,
+    negative_prompt: str | None,
+    strength: float,
+    image_size: str,
+    current_user: User,
+) -> GenerationResult:
+    if image is None and not source_image_url:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Either image or source_image_url is required.")
+
+    metadata = ReferenceImageRequestMetadata(
+        model=model,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        feature=feature,
+        strength=strength,
+        image_size=image_size,
+        filename=(image.filename if image else source_image_name) or "reference.png",
+    )
+    return await service.transform_reference_image(file=image, metadata=metadata, current_user=current_user, source_image_url=source_image_url)
+
+
+@router.post("/product-refine", response_model=GenerationResult)
+async def product_refine(
+    image: UploadFile | None = File(default=None),
+    prompt: str = Form(...),
+    model: str = Form(...),
+    source_image_url: str | None = Form(default=None),
+    source_image_name: str | None = Form(default=None),
+    negative_prompt: str | None = Form(default=None),
+    strength: float = Form(default=0.75),
+    image_size: str = Form(default="1K"),
+    current_user: User = Depends(require_module("product_refine")),
+) -> GenerationResult:
+    return await _reference_feature_transform(
+        image=image,
+        prompt=prompt,
+        model=model,
+        feature="product_refine",
+        source_image_url=source_image_url,
+        source_image_name=source_image_name,
+        negative_prompt=negative_prompt,
+        strength=strength,
+        image_size=image_size,
+        current_user=current_user,
+    )
+
+
+@router.post("/gemstone-design", response_model=GenerationResult)
+async def gemstone_design(
+    image: UploadFile | None = File(default=None),
+    prompt: str = Form(...),
+    model: str = Form(...),
+    source_image_url: str | None = Form(default=None),
+    source_image_name: str | None = Form(default=None),
+    negative_prompt: str | None = Form(default=None),
+    strength: float = Form(default=0.75),
+    image_size: str = Form(default="1K"),
+    current_user: User = Depends(require_module("gemstone_design")),
+) -> GenerationResult:
+    return await _reference_feature_transform(
+        image=image,
+        prompt=prompt,
+        model=model,
+        feature="gemstone_design",
+        source_image_url=source_image_url,
+        source_image_name=source_image_name,
+        negative_prompt=negative_prompt,
+        strength=strength,
+        image_size=image_size,
+        current_user=current_user,
+    )
+
+
+@router.post("/upscale", response_model=GenerationResult)
+async def upscale(
+    image: UploadFile | None = File(default=None),
+    prompt: str = Form(...),
+    model: str = Form(...),
+    source_image_url: str | None = Form(default=None),
+    source_image_name: str | None = Form(default=None),
+    negative_prompt: str | None = Form(default=None),
+    strength: float = Form(default=0.75),
+    image_size: str = Form(default="2K"),
+    current_user: User = Depends(require_module("upscale")),
+) -> GenerationResult:
+    return await _reference_feature_transform(
+        image=image,
+        prompt=prompt,
+        model=model,
+        feature="upscale",
+        source_image_url=source_image_url,
+        source_image_name=source_image_name,
+        negative_prompt=negative_prompt,
+        strength=strength,
+        image_size=image_size,
+        current_user=current_user,
+    )
 
 
 @router.post("/multi-view", response_model=GenerationResult)
@@ -71,6 +185,8 @@ async def multi_view_generation(
     source_image_name: str | None = Form(default=None),
     negative_prompt: str | None = Form(default=None),
     strength: float = Form(default=0.75),
+    image_size: str = Form(default="1K"),
+    current_user: User = Depends(require_module("multi_view")),
 ) -> GenerationResult:
     if image is None and not source_image_url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Either image or source_image_url is required.")
@@ -81,14 +197,18 @@ async def multi_view_generation(
         negative_prompt=negative_prompt,
         feature="multi_view",
         strength=strength,
+        image_size=image_size,
         filename=(image.filename if image else source_image_name) or "multi-view-reference.png",
     )
-    return await service.generate_multi_view(file=image, metadata=metadata, source_image_url=source_image_url)
+    return await service.generate_multi_view(file=image, metadata=metadata, current_user=current_user, source_image_url=source_image_url)
 
 
 @router.post("/split-multi-view", response_model=MultiViewSplitResponse)
-async def split_multi_view(payload: MultiViewSplitRequest) -> MultiViewSplitResponse:
-    return await service.split_multi_view_image(payload)
+async def split_multi_view(
+    payload: MultiViewSplitRequest,
+    current_user: User = Depends(require_module("multi_view_split")),
+) -> MultiViewSplitResponse:
+    return await service.split_multi_view_image(payload, current_user=current_user)
 
 
 @router.post(
@@ -106,6 +226,7 @@ async def fuse_images(
     mode: FusionMode = Form(default=FusionMode.balanced),
     primary_image_index: int = Form(default=0),
     strength: float = Form(default=0.75),
+    current_user: User = Depends(require_module("multi_image_fusion")),
 ) -> FusionJobAccepted:
     settings = get_settings()
     source_image_urls: list[str] = []
@@ -171,4 +292,4 @@ async def fuse_images(
         strength=strength,
         filenames=filenames,
     )
-    return await service.fuse_images(files=image_files, metadata=metadata, source_image_urls=source_image_urls)
+    return await service.fuse_images(files=image_files, metadata=metadata, current_user=current_user, source_image_urls=source_image_urls)

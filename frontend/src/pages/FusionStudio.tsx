@@ -132,7 +132,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns }: FusionStudio
       setSelectedHistoryId(null);
       onRecordRun({
         kind: "fusion",
-        title: `多图融合：${selectedModel.label}`,
+        title: "多图融合",
         model: selectedModel.id,
         provider: response.provider,
         status: response.status,

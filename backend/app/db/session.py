@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.db.migrations import run_migrations
 
 
 settings = get_settings()
@@ -48,3 +49,4 @@ def init_db() -> None:
 
     _ensure_mysql_database_exists()
     Base.metadata.create_all(bind=engine)
+    run_migrations(engine)

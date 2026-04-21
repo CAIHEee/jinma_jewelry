@@ -1,5 +1,6 @@
 import asyncio
 import base64
+from contextvars import ContextVar, Token
 from datetime import datetime
 from dataclasses import dataclass
 from io import BytesIO
@@ -14,6 +15,7 @@ from fastapi import HTTPException, UploadFile, status
 from starlette.datastructures import Headers
 
 from app.core.config import get_settings
+from app.models.user import User
 from app.schemas.ai import (
     FeatureDefinition,
     FusionJobAccepted,
@@ -140,6 +142,8 @@ MODEL_CATALOG: dict[str, TTAPIModelConfig] = {
     ),
 }
 
+_request_user: ContextVar[User | None] = ContextVar("ai_request_user", default=None)
+
 
 class AIService:
     def __init__(self) -> None:
@@ -207,164 +211,181 @@ class AIService:
             ]
         )
 
-    async def generate_text_to_image(self, request: TextToImageRequest) -> GenerationResult:
+    async def generate_text_to_image(self, request: TextToImageRequest, *, current_user: User) -> GenerationResult:
+        context_token = _request_user.set(current_user)
         model = self._get_model_or_404(request.model)
-        if not model.supports_text_to_image:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Model {request.model} does not support text-to-image generation.",
-            )
+        try:
+            if not model.supports_text_to_image:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Model {request.model} does not support text-to-image generation.",
+                )
 
-        if self._use_apiyi():
+            if self._use_apiyi():
+                if model.provider == ProviderType.gemini:
+                    return await self._generate_with_gemini_apiyi(request=request, model=model)
+                return await self._generate_with_flux_apiyi(request=request, model=model)
+
             if model.provider == ProviderType.gemini:
-                return await self._generate_with_gemini_apiyi(request=request, model=model)
-            return await self._generate_with_flux_apiyi(request=request, model=model)
-
-        if model.provider == ProviderType.gemini:
-            return await self._generate_with_gemini(request=request, model=model)
-        return await self._generate_with_flux(request=request, model=model)
+                return await self._generate_with_gemini(request=request, model=model)
+            return await self._generate_with_flux(request=request, model=model)
+        finally:
+            _request_user.reset(context_token)
 
     async def fuse_images(
         self,
         *,
         files: list[UploadFile],
         metadata: FusionRequestMetadata,
+        current_user: User,
         source_image_urls: list[str] | None = None,
     ) -> FusionJobAccepted:
+        context_token = _request_user.set(current_user)
         model = self._get_model_or_404(metadata.model)
-        if not model.supports_multi_image_fusion:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Model {metadata.model} does not support multi-image fusion.",
-            )
-
-        submit_files = files
-        if files:
-            input_assets = [
-                await self.asset_service.create_input_asset(
-                    file=file,
-                    module_kind="fusion",
-                    metadata={
-                        "feature": "fusion",
-                        "model": metadata.model,
-                        "primary_image_index": metadata.primary_image_index,
-                    },
+        try:
+            if not model.supports_multi_image_fusion:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Model {metadata.model} does not support multi-image fusion.",
                 )
-                for file in files
-            ]
-            metadata = metadata.model_copy(
-                update={
-                    "source_images": [
-                        {
-                            "filename": asset.name,
-                            "source_image_url": asset.preview_url,
-                            "storage_url": asset.storage_url,
-                            "preview_url": asset.preview_url,
-                        }
-                        for asset in input_assets
-                    ]
-                }
-            )
-        else:
-            normalized_urls = [item for item in (source_image_urls or []) if item]
-            submit_files = [
-                await self._build_upload_file_from_url(url, metadata.filenames[index] if index < len(metadata.filenames) else None)
-                for index, url in enumerate(normalized_urls)
-            ]
-            metadata = metadata.model_copy(
-                update={
-                    "source_images": [
-                        {
-                            "filename": metadata.filenames[index] if index < len(metadata.filenames) else f"image-{index + 1}.png",
-                            "source_image_url": url,
-                            "preview_url": url,
-                        }
-                        for index, url in enumerate(normalized_urls)
-                    ]
-                }
-            )
 
-        if self._use_apiyi():
-            if model.provider == ProviderType.gemini:
-                result = await self._fuse_with_gemini_apiyi(files=submit_files, metadata=metadata, model=model)
+            submit_files = files
+            if files:
+                input_assets = [
+                    await self.asset_service.create_input_asset(
+                        file=file,
+                        module_kind="fusion",
+                        current_user=current_user,
+                        metadata={
+                            "feature": "fusion",
+                            "model": metadata.model,
+                            "primary_image_index": metadata.primary_image_index,
+                        },
+                    )
+                    for file in files
+                ]
+                metadata = metadata.model_copy(
+                    update={
+                        "source_images": [
+                            {
+                                "filename": asset.name,
+                                "source_image_url": asset.preview_url,
+                                "storage_url": asset.storage_url,
+                                "preview_url": asset.preview_url,
+                            }
+                            for asset in input_assets
+                        ]
+                    }
+                )
             else:
-                result = await self._fuse_with_flux_apiyi(files=submit_files, metadata=metadata, model=model)
-        elif model.provider == ProviderType.gemini:
-            result = await self._fuse_with_gemini(files=submit_files, metadata=metadata, model=model)
-        else:
-            result = await self._fuse_with_flux(files=submit_files, metadata=metadata, model=model)
+                normalized_urls = [item for item in (source_image_urls or []) if item]
+                submit_files = [
+                    await self._build_upload_file_from_url(url, metadata.filenames[index] if index < len(metadata.filenames) else None)
+                    for index, url in enumerate(normalized_urls)
+                ]
+                metadata = metadata.model_copy(
+                    update={
+                        "source_images": [
+                            {
+                                "filename": metadata.filenames[index] if index < len(metadata.filenames) else f"image-{index + 1}.png",
+                                "source_image_url": url,
+                                "preview_url": url,
+                            }
+                            for index, url in enumerate(normalized_urls)
+                        ]
+                    }
+                )
 
-        return FusionJobAccepted(
-            job_id=result.job_id,
-            status=result.status,
-            message=result.message,
-            provider=result.provider,
-            feature="multi_image_fusion",
-            model=result.model,
-            image_url=result.image_url,
-            metadata=metadata,
-            raw_response=result.raw_response,
-        )
+            if self._use_apiyi():
+                if model.provider == ProviderType.gemini:
+                    result = await self._fuse_with_gemini_apiyi(files=submit_files, metadata=metadata, model=model)
+                else:
+                    result = await self._fuse_with_flux_apiyi(files=submit_files, metadata=metadata, model=model)
+            elif model.provider == ProviderType.gemini:
+                result = await self._fuse_with_gemini(files=submit_files, metadata=metadata, model=model)
+            else:
+                result = await self._fuse_with_flux(files=submit_files, metadata=metadata, model=model)
+
+            return FusionJobAccepted(
+                job_id=result.job_id,
+                status=result.status,
+                message=result.message,
+                provider=result.provider,
+                feature="multi_image_fusion",
+                model=result.model,
+                image_url=result.image_url,
+                metadata=metadata,
+                raw_response=result.raw_response,
+            )
+        finally:
+            _request_user.reset(context_token)
 
     async def transform_reference_image(
         self,
         *,
         file: UploadFile | None,
         metadata: ReferenceImageRequestMetadata,
+        current_user: User,
         source_image_url: str | None = None,
     ) -> GenerationResult:
+        context_token = _request_user.set(current_user)
         model = self._get_model_or_404(metadata.model)
-        if not model.supports_reference_images:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Model {metadata.model} does not support reference-image transforms.",
-            )
+        try:
+            if not model.supports_reference_images:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Model {metadata.model} does not support reference-image transforms.",
+                )
 
-        submit_file = file
-        if file is not None:
-            input_asset = await self.asset_service.create_input_asset(
-                file=file,
-                module_kind=self._map_feature_to_history_kind(metadata.feature),
-                metadata={
-                    "feature": metadata.feature,
-                    "model": metadata.model,
-                    "filename": metadata.filename,
-                },
-            )
-            metadata = metadata.model_copy(
-                update={
-                    "source_image_url": input_asset.preview_url,
-                    "source_image_storage_url": input_asset.storage_url,
-                }
-            )
-        elif source_image_url:
-            submit_file = await self._build_upload_file_from_url(source_image_url, metadata.filename)
-            metadata = metadata.model_copy(
-                update={
-                    "source_image_url": source_image_url,
-                    "source_image_storage_url": None,
-                }
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Either file or source_image_url is required.",
-            )
+            submit_file = file
+            if file is not None:
+                input_asset = await self.asset_service.create_input_asset(
+                    file=file,
+                    module_kind=self._map_feature_to_history_kind(metadata.feature),
+                    current_user=current_user,
+                    metadata={
+                        "feature": metadata.feature,
+                        "model": metadata.model,
+                        "filename": metadata.filename,
+                    },
+                )
+                metadata = metadata.model_copy(
+                    update={
+                        "source_image_url": input_asset.preview_url,
+                        "source_image_storage_url": input_asset.storage_url,
+                    }
+                )
+            elif source_image_url:
+                submit_file = await self._build_upload_file_from_url(source_image_url, metadata.filename)
+                metadata = metadata.model_copy(
+                    update={
+                        "source_image_url": source_image_url,
+                        "source_image_storage_url": None,
+                    }
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Either file or source_image_url is required.",
+                )
 
-        if self._use_apiyi():
+            if self._use_apiyi():
+                if model.provider == ProviderType.gemini:
+                    return await self._transform_with_gemini_apiyi(file=submit_file, metadata=metadata, model=model)
+                return await self._transform_with_flux_apiyi(file=submit_file, metadata=metadata, model=model)
+
             if model.provider == ProviderType.gemini:
-                return await self._transform_with_gemini_apiyi(file=submit_file, metadata=metadata, model=model)
-            return await self._transform_with_flux_apiyi(file=submit_file, metadata=metadata, model=model)
-
-        if model.provider == ProviderType.gemini:
-            return await self._transform_with_gemini(file=submit_file, metadata=metadata, model=model)
-        return await self._transform_with_flux(file=submit_file, metadata=metadata, model=model)
+                return await self._transform_with_gemini(file=submit_file, metadata=metadata, model=model)
+            return await self._transform_with_flux(file=submit_file, metadata=metadata, model=model)
+        finally:
+            _request_user.reset(context_token)
 
     async def generate_multi_view(
         self,
         *,
         file: UploadFile | None,
         metadata: ReferenceImageRequestMetadata,
+        current_user: User,
         source_image_url: str | None = None,
     ) -> GenerationResult:
         if metadata.feature != "multi_view":
@@ -373,50 +394,54 @@ class AIService:
         # Multi-view is still backed by reference-image generation upstream,
         # but we keep a dedicated service entry so the route, history metadata,
         # and future provider-specific handling stay isolated from generic edits.
-        return await self.transform_reference_image(file=file, metadata=metadata, source_image_url=source_image_url)
+        return await self.transform_reference_image(file=file, metadata=metadata, current_user=current_user, source_image_url=source_image_url)
 
-    async def split_multi_view_image(self, payload: MultiViewSplitRequest) -> MultiViewSplitResponse:
+    async def split_multi_view_image(self, payload: MultiViewSplitRequest, *, current_user: User) -> MultiViewSplitResponse:
+        context_token = _request_user.set(current_user)
         image_bytes, _ = await self._download_image(payload.image_url)
-        split_assets = await self._split_and_store_multi_view_assets(
-            image_bytes=image_bytes,
-            source_image_url=payload.image_url,
-            model=payload.model,
-            split_x_ratio=payload.split_x_ratio,
-            split_y_ratio=payload.split_y_ratio,
-            gap_x_ratio=payload.gap_x_ratio,
-            gap_y_ratio=payload.gap_y_ratio,
-        )
+        try:
+            split_assets = await self._split_and_store_multi_view_assets(
+                image_bytes=image_bytes,
+                source_image_url=payload.image_url,
+                model=payload.model,
+                split_x_ratio=payload.split_x_ratio,
+                split_y_ratio=payload.split_y_ratio,
+                gap_x_ratio=payload.gap_x_ratio,
+                gap_y_ratio=payload.gap_y_ratio,
+            )
 
-        response = MultiViewSplitResponse(
-            status="completed",
-            message="Multi-view image split completed.",
-            source_image_url=payload.image_url,
-            split_x_ratio=payload.split_x_ratio,
-            split_y_ratio=payload.split_y_ratio,
-            gap_x_ratio=payload.gap_x_ratio,
-            gap_y_ratio=payload.gap_y_ratio,
-            items=[MultiViewSplitItem(**item) for item in split_assets],
-        )
-        first_item = split_assets[0] if split_assets else None
-        self._persist_history(
-            kind="multi_view_split",
-            title="Multi-view split",
-            model_id=payload.model,
-            provider="system",
-            status=response.status,
-            prompt="Split four-grid multi-view image into separate view assets.",
-            image_url=first_item["image_url"] if first_item else None,
-            storage_url=first_item["storage_url"] if first_item else None,
-            metadata={
-                "source_image_url": payload.image_url,
-                "split_x_ratio": payload.split_x_ratio,
-                "split_y_ratio": payload.split_y_ratio,
-                "gap_x_ratio": payload.gap_x_ratio,
-                "gap_y_ratio": payload.gap_y_ratio,
-                "items": split_assets,
-            },
-        )
-        return response
+            response = MultiViewSplitResponse(
+                status="completed",
+                message="Multi-view image split completed.",
+                source_image_url=payload.image_url,
+                split_x_ratio=payload.split_x_ratio,
+                split_y_ratio=payload.split_y_ratio,
+                gap_x_ratio=payload.gap_x_ratio,
+                gap_y_ratio=payload.gap_y_ratio,
+                items=[MultiViewSplitItem(**item) for item in split_assets],
+            )
+            first_item = split_assets[0] if split_assets else None
+            self._persist_history(
+                kind="multi_view_split",
+                title=self._history_title_for_kind("multi_view_split"),
+                model_id=payload.model,
+                provider="system",
+                status=response.status,
+                prompt="Split four-grid multi-view image into separate view assets.",
+                image_url=first_item["image_url"] if first_item else None,
+                storage_url=first_item["storage_url"] if first_item else None,
+                metadata={
+                    "source_image_url": payload.image_url,
+                    "split_x_ratio": payload.split_x_ratio,
+                    "split_y_ratio": payload.split_y_ratio,
+                    "gap_x_ratio": payload.gap_x_ratio,
+                    "gap_y_ratio": payload.gap_y_ratio,
+                    "items": split_assets,
+                },
+            )
+            return response
+        finally:
+            _request_user.reset(context_token)
 
     def _get_model_or_404(self, model_id: str) -> TTAPIModelConfig:
         model = MODEL_CATALOG.get(model_id)
@@ -511,7 +536,7 @@ class AIService:
         )
         self._persist_history(
             kind="text_to_image",
-            title=f"Text-to-image: {model.label}",
+            title=self._history_title_for_kind("text_to_image"),
             model_id=model.id,
             provider=model.provider.value,
             status=result.status,
@@ -566,7 +591,7 @@ class AIService:
         if result.image_url:
             self._persist_history(
                 kind="text_to_image",
-                title=f"Text-to-image: {model.label}",
+                title=self._history_title_for_kind("text_to_image"),
                 model_id=model.id,
                 provider=model.provider.value,
                 status=result.status,
@@ -621,7 +646,7 @@ class AIService:
         )
         self._persist_history(
             kind="text_to_image",
-            title=f"Text-to-image: {model.label}",
+            title=self._history_title_for_kind("text_to_image"),
             model_id=model.id,
             provider=model.provider.value,
             status=result.status,
@@ -687,7 +712,7 @@ class AIService:
         if result.image_url:
             self._persist_history(
                 kind="text_to_image",
-                title=f"Text-to-image: {model.label}",
+                title=self._history_title_for_kind("text_to_image"),
                 model_id=model.id,
                 provider=model.provider.value,
                 status=result.status,
@@ -744,7 +769,7 @@ class AIService:
         )
         self._persist_history(
             kind="fusion",
-            title=f"Fusion: {model.label}",
+            title=self._history_title_for_kind("fusion"),
             model_id=model.id,
             provider=model.provider.value,
             status=result.status,
@@ -813,7 +838,7 @@ class AIService:
         )
         self._persist_history(
             kind="fusion",
-            title=f"Fusion: {model.label}",
+            title=self._history_title_for_kind("fusion"),
             model_id=model.id,
             provider=model.provider.value,
             status=result.status,
@@ -842,7 +867,7 @@ class AIService:
             "model": model.id,
             "prompt": metadata.prompt,
             "aspect_ratio": "1:1",
-            "image_size": "1K",
+            "image_size": metadata.image_size,
             "thinking_level": "Minimal",
             "refer_images": [await self._file_to_data_url(file)],
         }
@@ -917,7 +942,7 @@ class AIService:
                     "responseModalities": ["IMAGE"],
                     "imageConfig": {
                         "aspectRatio": "1:1",
-                        "imageSize": "1K",
+                        "imageSize": metadata.image_size,
                     },
                 },
             },
@@ -969,6 +994,7 @@ class AIService:
             "prompt": self._build_fusion_prompt(metadata),
             "mode": model.id,
             "aspect_ratio": "1:1",
+            "image_size": metadata.image_size,
         }
         submit_data = await self._post_multipart(
             base_url=self.settings.ttapi_flux_base_url,
@@ -1006,7 +1032,7 @@ class AIService:
         if result.image_url:
             self._persist_history(
                 kind="fusion",
-                title=f"Fusion: {model.label}",
+                title=self._history_title_for_kind("fusion"),
                 model_id=model.id,
                 provider=model.provider.value,
                 status=result.status,
@@ -1058,7 +1084,7 @@ class AIService:
         if result.image_url:
             self._persist_history(
                 kind="fusion",
-                title=f"Fusion: {model.label}",
+                title=self._history_title_for_kind("fusion"),
                 model_id=model.id,
                 provider=model.provider.value,
                 status=result.status,
@@ -1158,6 +1184,7 @@ class AIService:
             data={
                 "model": self._map_apiyi_model_id(model.id),
                 "prompt": metadata.prompt,
+                "size": "2048x2048" if metadata.image_size == "2K" else "1024x1024",
             },
             files=multipart_files,
         )
@@ -1474,6 +1501,7 @@ class AIService:
         storage_url: str | None,
         metadata: dict[str, object] | None,
     ) -> None:
+        request_user = self._require_request_user()
         self.history_service.create_record(
             HistoryRecordCreate(
                 kind=kind,  # type: ignore[arg-type]
@@ -1482,18 +1510,22 @@ class AIService:
                 provider=provider,
                 status=status,
                 prompt=prompt,
-                user_id=user_id,
+                user_id=user_id or request_user.id,
                 job_id=job_id,
                 image_url=image_url,
                 storage_url=storage_url,
                 metadata=metadata,
-            )
+            ),
+            current_user=request_user,
         )
 
     def _map_feature_to_history_kind(self, feature: str) -> str:
         feature_to_kind = {
             "image_edit": "image_edit",
             "sketch_to_realistic": "sketch_to_realistic",
+            "product_refine": "product_refine",
+            "gemstone_design": "gemstone_design",
+            "upscale": "upscale",
             "grayscale_relief": "grayscale_relief",
             "multi_view": "multi_view",
             "multi_view_refine": "multi_view",
@@ -1501,15 +1533,39 @@ class AIService:
         return feature_to_kind.get(feature, "image_edit")
 
     def _feature_title(self, feature: str, model_label: str) -> str:
-        title_map = {
-            "grayscale_relief": "Grayscale relief",
-            "image_edit": "Image edit",
-            "sketch_to_realistic": "Sketch to realistic",
-            "multi_view": "Multi-view",
-            "multi_view_refine": "Multi-view refine",
+        return self._module_display_name(self._map_feature_to_history_kind(feature))
+
+    def _history_title_for_kind(self, kind: str) -> str:
+        return self._module_display_name(kind)
+
+    def _module_display_name(self, kind: str) -> str:
+        label_map = {
+            "text_to_image": "文生图",
+            "fusion": "多图融合",
+            "image_edit": "图像编辑",
+            "sketch_to_realistic": "线稿转写实图",
+            "product_refine": "产品精修",
+            "gemstone_design": "裸石设计",
+            "upscale": "高清放大",
+            "grayscale_relief": "转灰度图",
+            "multi_view": "生成多视图",
+            "multi_view_split": "多视图切图",
         }
-        prefix = title_map.get(feature, "Reference transform")
-        return f"{prefix}: {model_label}"
+        return label_map.get(kind, "生成结果")
+
+    def _generated_asset_name(self, *, kind: str, content_type: str) -> str:
+        extension = self._extension_from_content_type(content_type)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"{self._module_display_name(kind)}_{timestamp}{extension}"
+
+    def _extension_from_content_type(self, content_type: str) -> str:
+        mapping = {
+            "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+        }
+        return mapping.get(content_type.lower(), ".png")
 
     def _build_reference_history_metadata(self, metadata: ReferenceImageRequestMetadata) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -1557,14 +1613,29 @@ class AIService:
         if not image_url:
             return {"storage_url": None, "access_url": None, "metadata": {}}
 
+        request_user = self._require_request_user()
         if not self.storage_service.is_configured():
             image_bytes, content_type = await self._download_image(image_url)
             object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
+            asset_name = self._generated_asset_name(kind=kind, content_type=content_type)
             storage_url = self._store_local_generated_asset(
                 object_key=object_key,
                 image_bytes=image_bytes,
             )
             access_url = self._build_asset_content_url(storage_url)
+            self.asset_service.create_stored_asset_record(
+                current_user=request_user,
+                name=asset_name,
+                module_kind=kind,
+                storage_url=storage_url,
+                mime_type=content_type,
+                file_size=len(image_bytes),
+                metadata={
+                    "storage_provider": "local_disk",
+                    "object_key": object_key,
+                    "source_image_url": image_url,
+                },
+            )
             return {
                 "storage_url": storage_url,
                 "access_url": access_url,
@@ -1577,12 +1648,26 @@ class AIService:
 
         image_bytes, content_type = await self._download_image(image_url)
         object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
+        asset_name = self._generated_asset_name(kind=kind, content_type=content_type)
         stored = self.storage_service.upload_bytes(
             object_key=object_key,
             content=image_bytes,
             content_type=content_type,
         )
         access_url = self._build_asset_content_url(stored.storage_url)
+        self.asset_service.create_stored_asset_record(
+            current_user=request_user,
+            name=asset_name,
+            module_kind=kind,
+            storage_url=stored.storage_url,
+            mime_type=content_type,
+            file_size=len(image_bytes),
+            metadata={
+                "storage_provider": self.settings.oss_provider,
+                "object_key": stored.object_key,
+                "source_image_url": image_url,
+            },
+        )
         return {
             "storage_url": stored.storage_url,
             "access_url": access_url,
@@ -1601,6 +1686,8 @@ class AIService:
         kind: str,
         model: str,
     ) -> dict[str, Any]:
+        request_user = self._require_request_user()
+        asset_name = self._generated_asset_name(kind=kind, content_type=content_type)
         if not self.storage_service.is_configured():
             object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
             storage_url = self._store_local_generated_asset(
@@ -1608,6 +1695,18 @@ class AIService:
                 image_bytes=image_bytes,
             )
             access_url = self._build_asset_content_url(storage_url)
+            self.asset_service.create_stored_asset_record(
+                current_user=request_user,
+                name=asset_name,
+                module_kind=kind,
+                storage_url=storage_url,
+                mime_type=content_type,
+                file_size=len(image_bytes),
+                metadata={
+                    "storage_provider": "local_disk",
+                    "object_key": object_key,
+                },
+            )
             return {
                 "storage_url": storage_url,
                 "access_url": access_url,
@@ -1624,6 +1723,18 @@ class AIService:
             content_type=content_type,
         )
         access_url = self._build_asset_content_url(stored.storage_url)
+        self.asset_service.create_stored_asset_record(
+            current_user=request_user,
+            name=asset_name,
+            module_kind=kind,
+            storage_url=stored.storage_url,
+            mime_type=content_type,
+            file_size=len(image_bytes),
+            metadata={
+                "storage_provider": self.settings.oss_provider,
+                "object_key": stored.object_key,
+            },
+        )
         return {
             "storage_url": stored.storage_url,
             "access_url": access_url,
@@ -1675,6 +1786,7 @@ class AIService:
 
     async def _download_image(self, image_url: str) -> tuple[bytes, str]:
         if image_url.startswith(("local://", "oss://", "/api/v1/assets/")):
+            self.asset_service.ensure_storage_url_access(storage_url=image_url, current_user=self._require_request_user())
             content, content_type, _ = self.asset_service.fetch_asset_bytes(image_url)
             return content, content_type
 
@@ -1687,6 +1799,12 @@ class AIService:
             )
         content_type = response.headers.get("Content-Type", "image/png").split(";")[0].strip() or "image/png"
         return response.content, content_type
+
+    def _require_request_user(self) -> User:
+        user = _request_user.get()
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Missing request user context.")
+        return user
 
     async def _build_upload_file_from_url(self, image_url: str, filename: str | None = None) -> UploadFile:
         image_bytes, content_type = await self._download_image(image_url)

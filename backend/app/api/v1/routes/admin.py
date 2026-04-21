@@ -1,0 +1,40 @@
+from fastapi import APIRouter, Depends, status
+
+from app.api.deps import require_root
+from app.models.user import User
+from app.schemas.admin import AdminUser, AdminUserCreate, AdminUserListResponse, AdminUserUpdate, UserPermissionUpdateRequest
+from app.schemas.auth import ModulePermissionItem, PasswordResetRequest
+from app.services.user_service import UserService
+
+
+router = APIRouter()
+service = UserService()
+
+
+@router.get("/admin/users", response_model=AdminUserListResponse)
+def list_users(_: User = Depends(require_root)) -> AdminUserListResponse:
+    return service.list_users()
+
+
+@router.post("/admin/users", response_model=AdminUser, status_code=status.HTTP_201_CREATED)
+def create_user(payload: AdminUserCreate, _: User = Depends(require_root)) -> AdminUser:
+    return service.create_user(payload)
+
+
+@router.patch("/admin/users/{user_id}", response_model=AdminUser)
+def update_user(user_id: str, payload: AdminUserUpdate, _: User = Depends(require_root)) -> AdminUser:
+    return service.update_user(user_id, payload)
+
+
+@router.post("/admin/users/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_password(user_id: str, payload: PasswordResetRequest, _: User = Depends(require_root)) -> None:
+    service.reset_password(user_id, payload.password)
+
+
+@router.put("/admin/users/{user_id}/permissions", response_model=list[ModulePermissionItem])
+def update_permissions(
+    user_id: str,
+    payload: UserPermissionUpdateRequest,
+    _: User = Depends(require_root),
+) -> list[ModulePermissionItem]:
+    return service.update_permissions(user_id, payload)

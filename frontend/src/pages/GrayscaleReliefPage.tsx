@@ -103,7 +103,7 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
       setSelectedHistoryId(null);
       onRecordRun({
         kind: "grayscale_relief",
-        title: `转灰度图：${selectedModel.label}`,
+        title: "转灰度图",
         model: selectedModel.id,
         provider: response.provider,
         status: response.status,

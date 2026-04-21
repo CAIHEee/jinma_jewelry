@@ -1,12 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
-
-
-client = TestClient(app)
-
-
-def test_model_catalog_exposes_expected_models() -> None:
+def test_model_catalog_exposes_expected_models(client: TestClient) -> None:
     response = client.get("/api/v1/ai/models")
 
     assert response.status_code == 200
@@ -18,8 +12,8 @@ def test_model_catalog_exposes_expected_models() -> None:
     assert "flux-kontext-pro" in model_ids
 
 
-def test_text_to_image_rejects_unknown_model() -> None:
-    response = client.post(
+def test_text_to_image_rejects_unknown_model(auth_client: TestClient) -> None:
+    response = auth_client.post(
         "/api/v1/ai/text-to-image",
         json={
             "prompt": "test",
@@ -34,8 +28,8 @@ def test_text_to_image_rejects_unknown_model() -> None:
     assert response.status_code == 404
 
 
-def test_fusion_requires_two_images() -> None:
-    response = client.post(
+def test_fusion_requires_two_images(auth_client: TestClient) -> None:
+    response = auth_client.post(
         "/api/v1/ai/fuse-images",
         data={
             "prompt": "blend these images",
@@ -50,8 +44,8 @@ def test_fusion_requires_two_images() -> None:
     assert response.status_code == 400
 
 
-def test_reference_transform_rejects_unknown_model() -> None:
-    response = client.post(
+def test_reference_transform_rejects_unknown_model(auth_client: TestClient) -> None:
+    response = auth_client.post(
         "/api/v1/ai/reference-image-transform",
         data={
             "prompt": "turn this into grayscale relief",

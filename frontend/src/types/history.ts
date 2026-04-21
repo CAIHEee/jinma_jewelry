@@ -10,6 +10,8 @@ export interface PersistedHistoryItem {
   storage_url: string | null;
   preview_url: string | null;
   metadata?: Record<string, unknown> | null;
+  owner_username: string | null;
+  can_delete: boolean;
   created_at: string;
 }
 

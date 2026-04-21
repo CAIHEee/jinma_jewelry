@@ -9,6 +9,8 @@ HistoryKind = Literal[
     "fusion",
     "image_edit",
     "sketch_to_realistic",
+    "product_refine",
+    "gemstone_design",
     "grayscale_relief",
     "multi_view",
     "multi_view_split",
@@ -46,6 +48,8 @@ class HistoryRecord(BaseModel):
     storage_url: str | None = None
     preview_url: str | None = None
     metadata: dict[str, object] | None = None
+    owner_username: str | None = None
+    can_delete: bool = False
     created_at: datetime
 
 

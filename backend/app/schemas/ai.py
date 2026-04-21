@@ -55,6 +55,7 @@ class ReferenceImageRequestMetadata(BaseModel):
     negative_prompt: str | None = None
     feature: str = "image_edit"
     strength: float = Field(default=0.75, ge=0.0, le=1.0)
+    image_size: str = "1K"
     filename: str
     source_image_url: str | None = None
     source_image_storage_url: str | None = None
