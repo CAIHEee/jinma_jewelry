@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
@@ -21,6 +22,12 @@ const modes: Array<{ value: FusionMode; label: string; description: string }> = 
 ];
 
 const templates = getPromptTemplatesByModule("fusion");
+const progressPhases = [
+  { at: 16, label: "校验多张参考图..." },
+  { at: 38, label: "提交融合任务..." },
+  { at: 72, label: "融合材质与结构中..." },
+  { at: 95, label: "整理融合结果..." },
+];
 
 interface FusionStudioProps {
   onRecordRun: (run: Omit<WorkspaceRun, "id" | "createdAt">) => void;
@@ -43,6 +50,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
   const [previewOpen, setPreviewOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
 
   useEffect(() => {
     if (!models.length) {
@@ -109,6 +117,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
     }
 
     setIsSubmitting(true);
+    setProgressState("running");
 
     try {
       const sourceImageUrls = selectedAssets
@@ -143,7 +152,9 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
         primaryImageIndex,
         prompt,
       });
+      setProgressState("success");
     } catch (submitError) {
+      setProgressState("error");
       setError(submitError instanceof Error ? submitError.message : "融合任务提交失败");
     } finally {
       setIsSubmitting(false);
@@ -164,7 +175,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
                   </option>
                 ))}
               </select>
-              {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
+              {modelError ? <small>{modelError}</small> : null}
             </label>
 
             <AssetSourcePicker
@@ -241,6 +252,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
             </details>
 
             {error ? <p className="error-text">{error}</p> : null}
+            <GenerationProgress state={progressState} phases={progressPhases} successLabel="融合已完成" errorLabel="融合失败" />
 
             <button className="primary-button align-start" type="submit" disabled={isSubmitting || !selectedModel}>
               {isSubmitting ? "提交中..." : "提交融合任务"}
@@ -259,17 +271,6 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
                 <div className="drawer-content">
                   {previewResultUrl || result ? (
                     <div className="stack-list">
-                      {result ? <div className="result-card compact-result-card">
-                        <p>
-                          <strong>任务 ID：</strong>
-                          {result.job_id ?? "同步返回"}
-                        </p>
-                        <p>
-                          <strong>状态：</strong>
-                          {result.status}
-                        </p>
-                      </div> : null}
-
                       <div className="result-preview-pane result-preview-pane-single">
                         <span>融合结果</span>
                         <div

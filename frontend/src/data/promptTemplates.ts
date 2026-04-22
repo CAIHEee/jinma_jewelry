@@ -77,7 +77,7 @@ export const promptTemplates: PromptTemplate[] = [
     english:
       "Design a premium loose gemstone concept based on the reference image, focusing on stone contour, polish, translucency, surface luster, and collectible presentation. Keep the gemstone as the visual subject with clean studio background.",
     chinese:
-      "基于参考图设计高级裸石方案，重点表现宝石轮廓、抛光、通透感、表面光泽与收藏级展示效果。以裸石本身为主体，背景保持干净的棚拍展示环境。",
+      "以参考图内全部裸石为基础进行合理的人工珠宝设计，不改变任何裸石的形状、大小比例，采用精致金属材质进行镶嵌与装饰，对每颗裸石进行美学化、对称化布局，设计结构合理，不得添加其它参考图以外的玉石、细节完整、光影精致的珠宝成品设计图。",
   },
   {
     id: "upscale-jewelry-clean",

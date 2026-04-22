@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
+import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
@@ -18,6 +19,12 @@ interface TextToImagePageProps {
 }
 
 const templates = getPromptTemplatesByModule("text-to-image");
+const progressPhases = [
+  { at: 20, label: "整理提示词..." },
+  { at: 42, label: "提交文生图请求..." },
+  { at: 76, label: "珠宝效果生成中..." },
+  { at: 95, label: "回传高清结果..." },
+];
 
 export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: TextToImagePageProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_text_to_image);
@@ -30,6 +37,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
   const [previewOpen, setPreviewOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
 
   useEffect(() => {
     if (!models.length) {
@@ -60,6 +68,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
 
     setLoading(true);
     setError(null);
+    setProgressState("running");
 
     try {
       const response = await submitTextToImage({
@@ -81,7 +90,9 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
         imageUrl: response.image_url,
         prompt,
       });
+      setProgressState("success");
     } catch (submitError) {
+      setProgressState("error");
       setError(submitError instanceof Error ? submitError.message : "图片生成失败");
     } finally {
       setLoading(false);
@@ -102,7 +113,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
                   </option>
                 ))}
               </select>
-              {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
+              {modelError ? <small>{modelError}</small> : null}
             </label>
 
             <div className="dense-grid text-to-image-meta-row compact-meta-row">
@@ -134,6 +145,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
             </label>
 
             {error ? <p className="error-text">{error}</p> : null}
+            <GenerationProgress state={progressState} phases={progressPhases} successLabel="图片已完成" errorLabel="文生图失败" />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>
               {loading ? "生成中..." : "生成图片"}

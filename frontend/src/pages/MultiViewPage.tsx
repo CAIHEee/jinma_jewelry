@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
@@ -21,7 +22,13 @@ interface MultiViewPageProps {
 const multiViewTemplates = getPromptTemplatesByModule("multi-view");
 const defaultPrompt =
   multiViewTemplates[0]?.chinese ??
-  "基于参考图生成珠宝多视图单图，统一结构、材质、工艺与比例，以四宫格形式输出。";
+  "基于参考图生成珠宝多视图单图，统一结构、材质、工艺与比例，以四宫格形式输出，并且不用给出文字提示。";
+const progressPhases = [
+  { at: 18, label: "分析主视图结构..." },
+  { at: 40, label: "提交多视图请求..." },
+  { at: 74, label: "生成多角度视图中..." },
+  { at: 95, label: "拼合四宫格结果..." },
+];
 
 export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHistory }: MultiViewPageProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
@@ -33,6 +40,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
   const [previewOpen, setPreviewOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
 
   useEffect(() => {
     if (!models.length) return;
@@ -76,6 +84,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
 
     setLoading(true);
     setError(null);
+    setProgressState("running");
 
     try {
       const selectedAsset = selectedAssets[0] ?? null;
@@ -106,7 +115,9 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
         prompt: defaultPrompt,
       });
+      setProgressState("success");
     } catch (submitError) {
+      setProgressState("error");
       setError(submitError instanceof Error ? submitError.message : "多视图生成失败");
     } finally {
       setLoading(false);
@@ -135,10 +146,11 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
                   </option>
                 ))}
               </select>
-              {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
+              {modelError ? <small>{modelError}</small> : null}
             </label>
 
             {error ? <p className="error-text">{error}</p> : null}
+            <GenerationProgress state={progressState} phases={progressPhases} successLabel="多视图已完成" errorLabel="多视图生成失败" />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>
               {loading ? "生成中..." : "生成多视图单图"}

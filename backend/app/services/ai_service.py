@@ -1660,6 +1660,7 @@ class AIService:
         name_suffix: str | None = None,
     ) -> str:
         extension = self._extension_from_content_type(content_type)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if preferred_name:
             source_name = Path(preferred_name).name.strip()
             source_stem = Path(source_name).stem.strip()
@@ -1667,10 +1668,9 @@ class AIService:
                 sanitized_stem = source_stem.replace("/", "_").replace("\\", "_")
                 if name_suffix:
                     sanitized_suffix = name_suffix.replace("/", "_").replace("\\", "_")
-                    return f"{sanitized_stem}_{sanitized_suffix}{extension}"
-                return f"{sanitized_stem}{extension}"
+                    return f"{sanitized_stem}_{sanitized_suffix}_{timestamp}{extension}"
+                return f"{sanitized_stem}_{timestamp}{extension}"
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"{self._module_display_name(kind)}_{timestamp}{extension}"
 
     def _stored_filename_from_object_key(self, object_key: str, fallback_name: str) -> str:
@@ -1764,12 +1764,12 @@ class AIService:
                 preferred_name=preferred_name,
                 name_suffix=name_suffix,
             )
-            asset_name = self._stored_filename_from_object_key(object_key, fallback_name)
+            asset_name = fallback_name
             storage_url = self._store_local_generated_asset(
                 object_key=object_key,
                 image_bytes=image_bytes,
             )
-            access_url = self._build_asset_content_url(storage_url)
+            access_url = self._build_asset_content_url(storage_url, asset_name)
             self.asset_service.create_stored_asset_record(
                 current_user=request_user,
                 name=asset_name,
@@ -1801,13 +1801,13 @@ class AIService:
             preferred_name=preferred_name,
             name_suffix=name_suffix,
         )
-        asset_name = self._stored_filename_from_object_key(object_key, fallback_name)
+        asset_name = fallback_name
         stored = self.storage_service.upload_bytes(
             object_key=object_key,
             content=image_bytes,
             content_type=content_type,
         )
-        access_url = self._build_asset_content_url(stored.storage_url)
+        access_url = self._build_asset_content_url(stored.storage_url, asset_name)
         self.asset_service.create_stored_asset_record(
             current_user=request_user,
             name=asset_name,
@@ -1850,12 +1850,12 @@ class AIService:
         )
         if not self.storage_service.is_configured():
             object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
-            asset_name = self._stored_filename_from_object_key(object_key, fallback_name)
+            asset_name = fallback_name
             storage_url = self._store_local_generated_asset(
                 object_key=object_key,
                 image_bytes=image_bytes,
             )
-            access_url = self._build_asset_content_url(storage_url)
+            access_url = self._build_asset_content_url(storage_url, asset_name)
             self.asset_service.create_stored_asset_record(
                 current_user=request_user,
                 name=asset_name,
@@ -1878,13 +1878,13 @@ class AIService:
             }
 
         object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
-        asset_name = self._stored_filename_from_object_key(object_key, fallback_name)
+        asset_name = fallback_name
         stored = self.storage_service.upload_bytes(
             object_key=object_key,
             content=image_bytes,
             content_type=content_type,
         )
-        access_url = self._build_asset_content_url(stored.storage_url)
+        access_url = self._build_asset_content_url(stored.storage_url, asset_name)
         self.asset_service.create_stored_asset_record(
             current_user=request_user,
             name=asset_name,

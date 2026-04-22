@@ -43,6 +43,7 @@ import type { PersistedAssetItem } from "./types/assets";
 import type { PersistedHistoryItem } from "./types/history";
 import type { AssetItem } from "./types/mockData";
 import type { WorkspaceRun } from "./types/workspace";
+import { appendSecondSuffixToName, buildUploadedAssetName } from "./utils/download";
 import {
   dedupePersistedHistoryItems,
   formatHistoryTimestamp,
@@ -154,6 +155,14 @@ function scoreAssetName(value: string): number {
   if (containsChinese(value)) return 3;
   if (looksGeneratedFilename(value)) return 1;
   return 2;
+}
+
+function choosePreferredAssetName(primary: string | null | undefined, fallback: string | null | undefined): string {
+  const primaryValue = primary?.trim() ?? "";
+  const fallbackValue = fallback?.trim() ?? "";
+  if (!primaryValue) return fallbackValue;
+  if (!fallbackValue) return primaryValue;
+  return scoreAssetName(primaryValue) >= scoreAssetName(fallbackValue) ? primaryValue : fallbackValue;
 }
 
 function choosePreferredAssetItem(left: AssetItem, right: AssetItem): AssetItem {
@@ -458,7 +467,13 @@ export default function App() {
     const uploadedAssets = persistedAssets.map((item) => {
       const moduleLabel = item.module_kind ? mapKindToAssetCategory(item.module_kind) : "已上传资产";
       const previewUrl = item.preview_url ?? item.storage_url;
-      const resolvedName = extractStoredFilename(item.storage_url) ?? item.name;
+      const preferredName = choosePreferredAssetName(item.name, extractStoredFilename(item.storage_url));
+      const resolvedName =
+        item.source_kind === "generated_output"
+          ? appendSecondSuffixToName(preferredName, item.created_at)
+          : item.source_kind.includes("upload")
+            ? buildUploadedAssetName(item.owner_username, preferredName, item.created_at)
+            : preferredName;
       return {
         id: `asset-${item.id}`,
         name: resolvedName,
@@ -485,7 +500,7 @@ export default function App() {
       .filter((item) => item.imageUrl && !isBlobUrl(item.imageUrl))
       .map((item) => ({
         id: `session-${item.id}`,
-        name: item.title,
+        name: appendSecondSuffixToName(item.title, item.createdAt),
         category: mapKindToAssetCategory(item.kind),
         source: "当前会话",
         updatedAt: formatHistoryTimestamp(item.createdAt),

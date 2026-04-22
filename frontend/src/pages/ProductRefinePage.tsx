@@ -3,6 +3,13 @@ import type { AssetItem } from "../types/mockData";
 import type { WorkspaceRun } from "../types/workspace";
 import type { ModuleHistoryEntry } from "../utils/history";
 
+const progressPhases = [
+  { at: 18, label: "分析产品参考图..." },
+  { at: 40, label: "提交精修请求..." },
+  { at: 74, label: "增强材质与光感中..." },
+  { at: 95, label: "整理精修结果..." },
+];
+
 interface ProductRefinePageProps {
   assetItems: AssetItem[];
   onRecordRun: (run: Omit<WorkspaceRun, "id" | "createdAt">) => void;
@@ -32,6 +39,9 @@ export function ProductRefinePage(props: ProductRefinePageProps) {
       endpointPath="/ai/product-refine"
       allowMultipleSources
       defaultPrompt=""
+      progressPhases={progressPhases}
+      successLabel="精修图已完成"
+      errorProgressLabel="产品精修失败"
     />
   );
 }

@@ -225,8 +225,8 @@ function choosePreferredHistoryItem(left: ModuleHistoryEntry, right: ModuleHisto
     }
   }
 
-  if (left.source === "session" && right.source === "persisted") return left;
-  if (left.source === "persisted" && right.source === "session") return right;
+  if (left.source === "session" && right.source === "persisted") return right;
+  if (left.source === "persisted" && right.source === "session") return left;
   return right;
 }
 

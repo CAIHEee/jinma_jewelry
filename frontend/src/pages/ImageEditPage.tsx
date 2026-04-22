@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
@@ -17,6 +18,12 @@ const templates = getPromptTemplatesByModule("image-edit");
 const defaultPrompt =
   templates[0]?.chinese ??
   "将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。";
+const progressPhases = [
+  { at: 18, label: "分析线稿结构..." },
+  { at: 40, label: "提交写实转绘请求..." },
+  { at: 74, label: "渲染珠宝材质中..." },
+  { at: 95, label: "整理写实结果..." },
+];
 
 interface ImageEditPageProps {
   assetItems: AssetItem[];
@@ -36,6 +43,7 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
   const [previewOpen, setPreviewOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
 
   useEffect(() => {
     if (!models.length) return;
@@ -74,6 +82,7 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
 
     setLoading(true);
     setError(null);
+    setProgressState("running");
     try {
       const selectedAsset = selectedAssets[0] ?? null;
       const selectedAssetUrl = selectedAsset?.fileUrl ?? selectedAsset?.previewUrl ?? selectedAsset?.storageUrl ?? null;
@@ -101,7 +110,9 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
         prompt,
       });
+      setProgressState("success");
     } catch (submitError) {
+      setProgressState("error");
       setError(submitError instanceof Error ? submitError.message : "线稿转写实图失败");
     } finally {
       setLoading(false);
@@ -130,7 +141,7 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
                   </option>
                 ))}
               </select>
-              {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
+              {modelError ? <small>{modelError}</small> : null}
             </label>
 
             <label className="input-group prompt-input-group compact-prompt-group">
@@ -142,6 +153,7 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
             </label>
 
             {error ? <p className="error-text">{error}</p> : null}
+            <GenerationProgress state={progressState} phases={progressPhases} successLabel="写实图已完成" errorLabel="写实转绘失败" />
 
             <button className="primary-button align-start" type="button" onClick={handleSubmit} disabled={loading || !selectedModel}>
               {loading ? "生成中..." : "生成写实图"}

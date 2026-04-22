@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { appendSecondSuffixToName, buildDownloadFilename, buildDownloadUrl } from "../utils/download";
 import { formatHistoryTimestamp } from "../utils/history";
 import type { ModuleHistoryEntry } from "../utils/history";
 
@@ -14,6 +15,10 @@ interface PageGenerationHistoryProps {
 export function PageGenerationHistory({ title, items, activeId, onPreview, onDeleteHistory }: PageGenerationHistoryProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
+
+  function resolveDisplayTitle(item: ModuleHistoryEntry): string {
+    return appendSecondSuffixToName(item.title, item.createdAt);
+  }
 
   async function handleDelete(item: ModuleHistoryEntry) {
     if (item.source !== "persisted" || !item.persistedId || !onDeleteHistory) {
@@ -65,11 +70,11 @@ export function PageGenerationHistory({ title, items, activeId, onPreview, onDel
                   className="page-history-card-button"
                   type="button"
                   onClick={() => onPreview?.(item)}
-                  title={collapsed ? item.title : undefined}
+                  title={collapsed ? resolveDisplayTitle(item) : undefined}
                 >
                   {item.imageUrl ? (
                     <div className="page-history-thumb history-preview-frame">
-                      <img className="generated-image image-fit-contain" src={item.imageUrl} alt={item.title} />
+                      <img className="generated-image image-fit-contain" src={item.imageUrl} alt={resolveDisplayTitle(item)} />
                     </div>
                   ) : (
                     <span className="status-pill idle">{item.status}</span>
@@ -78,7 +83,7 @@ export function PageGenerationHistory({ title, items, activeId, onPreview, onDel
                   {!collapsed ? (
                     <>
                       <div className="history-inline-head history-entry-head">
-                        <h4>{item.title}</h4>
+                        <h4>{resolveDisplayTitle(item)}</h4>
                       </div>
                       <div className="history-meta-row">
                         <span className="history-time-pill">{formatHistoryTimestamp(item.createdAt)}</span>
@@ -90,14 +95,39 @@ export function PageGenerationHistory({ title, items, activeId, onPreview, onDel
 
                 {!collapsed && onDeleteHistory && item.source === "persisted" && item.persistedId ? (
                   <div className="page-history-card-actions">
+                    {item.imageUrl ? (
+                      <a
+                        className="history-icon-button"
+                        href={buildDownloadUrl(item.imageUrl, buildDownloadFilename(resolveDisplayTitle(item), item.imageUrl)) ?? item.imageUrl}
+                        download={buildDownloadFilename(resolveDisplayTitle(item), item.imageUrl)}
+                        title="下载图片"
+                        aria-label="下载图片"
+                      >
+                        <span aria-hidden="true">↓</span>
+                      </a>
+                    ) : null}
                     <button
-                      className="secondary-button compact-button"
+                      className="history-icon-button"
                       type="button"
                       onClick={() => void handleDelete(item)}
                       disabled={deletingHistoryId === item.persistedId}
+                      title={deletingHistoryId === item.persistedId ? "删除中" : "删除记录"}
+                      aria-label={deletingHistoryId === item.persistedId ? "删除中" : "删除记录"}
                     >
-                      {deletingHistoryId === item.persistedId ? "删除中..." : "删除记录"}
+                      <span aria-hidden="true">{deletingHistoryId === item.persistedId ? "…" : "×"}</span>
                     </button>
+                  </div>
+                ) : !collapsed && item.imageUrl ? (
+                  <div className="page-history-card-actions">
+                    <a
+                      className="history-icon-button"
+                      href={buildDownloadUrl(item.imageUrl, buildDownloadFilename(resolveDisplayTitle(item), item.imageUrl)) ?? item.imageUrl}
+                      download={buildDownloadFilename(resolveDisplayTitle(item), item.imageUrl)}
+                      title="下载图片"
+                      aria-label="下载图片"
+                    >
+                      <span aria-hidden="true">↓</span>
+                    </a>
                   </div>
                 ) : null}
               </article>

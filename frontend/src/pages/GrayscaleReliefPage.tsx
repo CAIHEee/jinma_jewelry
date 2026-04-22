@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
@@ -15,6 +16,12 @@ const templates = getPromptTemplatesByModule("grayscale-relief");
 const defaultPrompt =
   templates[0]?.chinese ??
   "严格保留参考图的结构、比例与雕塑细节，将其渲染为哑光灰度泥模效果，不要金属反光与宝石折射，仅保留轻微 AO 阴影。";
+const progressPhases = [
+  { at: 18, label: "提取结构轮廓..." },
+  { at: 42, label: "提交灰度转换请求..." },
+  { at: 76, label: "生成灰阶泥模质感..." },
+  { at: 95, label: "整理灰度结果..." },
+];
 
 interface GrayscaleReliefPageProps {
   assetItems: AssetItem[];
@@ -33,6 +40,7 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
   const [previewOpen, setPreviewOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
 
   useEffect(() => {
     if (!models.length) {
@@ -78,6 +86,7 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
 
     setLoading(true);
     setError(null);
+    setProgressState("running");
 
     try {
       const selectedAsset = selectedAssets[0] ?? null;
@@ -108,7 +117,9 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
         prompt: defaultPrompt,
       });
+      setProgressState("success");
     } catch (submitError) {
+      setProgressState("error");
       setError(submitError instanceof Error ? submitError.message : "转灰度图失败");
     } finally {
       setLoading(false);
@@ -137,10 +148,11 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
                   </option>
                 ))}
               </select>
-              {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
+              {modelError ? <small>{modelError}</small> : null}
             </label>
 
             {error ? <p className="error-text">{error}</p> : null}
+            <GenerationProgress state={progressState} phases={progressPhases} successLabel="灰度图已完成" errorLabel="灰度转换失败" />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>
               {loading ? "生成中..." : "生成灰度图"}

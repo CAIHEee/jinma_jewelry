@@ -76,11 +76,15 @@ export function AssetManagementPage({
     try {
       if (item.persistedAssetId && onDeleteAsset) {
         await onDeleteAsset(item.persistedAssetId);
+        setToast({ type: "success", message: "资产已删除" });
         return;
       }
       if (item.persistedHistoryId && onDeleteHistory) {
         await onDeleteHistory(item.persistedHistoryId);
+        setToast({ type: "success", message: "记录已删除" });
       }
+    } catch (error) {
+      setToast({ type: "error", message: error instanceof Error ? error.message : "删除失败" });
     } finally {
       setDeletingAssetId(null);
     }
@@ -112,8 +116,25 @@ export function AssetManagementPage({
     }
   }
 
+  async function handleCommunityUpload() {
+    if (!communityUploadFile || !onUploadCommunityAsset) return;
+    try {
+      await onUploadCommunityAsset(communityUploadFile, "asset_management");
+      setToast({ type: "success", message: "社区资产已上传" });
+      setCommunityUploadFile(null);
+    } catch (error) {
+      setToast({ type: "error", message: error instanceof Error ? error.message : "上传失败" });
+    }
+  }
+
   return (
     <div className="page-stack compact-page">
+      {toast ? (
+        <div className="admin-toast-layer" aria-live="polite">
+          <div className={toast.type === "success" ? "admin-toast success" : "admin-toast error"}>{toast.message}</div>
+        </div>
+      ) : null}
+
       <section className="panel compact-panel">
         <div className="asset-primary-nav">
           <button
@@ -159,7 +180,7 @@ export function AssetManagementPage({
               className="secondary-button compact-button asset-upload-button"
               type="button"
               disabled={!communityUploadFile}
-              onClick={() => communityUploadFile && void onUploadCommunityAsset(communityUploadFile, "asset_management")}
+              onClick={() => void handleCommunityUpload()}
             >
               上传社区资产
             </button>
@@ -167,7 +188,6 @@ export function AssetManagementPage({
         ) : null}
 
         {assetError ? <p className="error-text">{assetError}</p> : null}
-        {toast ? <div className={toast.type === "success" ? "asset-toast success" : "asset-toast error"}>{toast.message}</div> : null}
 
         <div className="asset-grid">
           {filteredAssets.map((item) => {

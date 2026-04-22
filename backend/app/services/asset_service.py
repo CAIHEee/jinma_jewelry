@@ -53,6 +53,11 @@ class AssetService:
 
         content_type = file.content_type or "image/png"
         filename = file.filename or "upload.png"
+        asset_name = self._build_uploaded_asset_name(
+            username=current_user.username,
+            filename=filename,
+            content_type=content_type,
+        )
         object_key = self._build_object_key(module_kind=module_kind, filename=filename, content_type=content_type)
 
         if self.storage_service.is_configured():
@@ -72,7 +77,7 @@ class AssetService:
             record = AssetRecordModel(
                 user_id=current_user.id,
                 owner_user_id=current_user.id,
-                name=filename,
+                name=asset_name,
                 source_kind=source_kind,
                 module_kind=module_kind,
                 visibility=visibility,
@@ -363,6 +368,12 @@ class AssetService:
         stem = Path(safe_filename).stem or "asset"
         now = datetime.utcnow()
         return f"assets/input/{module_kind}/{now:%Y/%m/%d}/{stem}_{uuid4().hex[:8]}{extension}"
+
+    def _build_uploaded_asset_name(self, *, username: str, filename: str, content_type: str) -> str:
+        sanitized_username = "".join(char if char.isalnum() or char in {"_", "-"} else "_" for char in username.strip()) or "user"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        extension = Path(filename).suffix or self._guess_extension(content_type)
+        return f"{sanitized_username}_upload_{timestamp}{extension.lower()}"
 
     def _resolve_local_object_path(self, object_key: str) -> Path:
         normalized_parts = [part for part in Path(object_key).parts if part not in {"", ".", ".."}]

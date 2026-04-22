@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AutoResizeTextarea } from "./AutoResizeTextarea";
 import { AssetSourcePicker } from "./AssetSourcePicker";
+import { GenerationProgress } from "./GenerationProgress";
 import { PageGenerationHistory } from "./PageGenerationHistory";
 import { PromptTemplateImporter } from "./PromptTemplateImporter";
 import { ResultPreviewModal } from "./ResultPreviewModal";
@@ -13,6 +14,7 @@ import type { AssetItem } from "../types/mockData";
 import type { PromptTemplate } from "../types/prompts";
 import type { WorkspaceRun } from "../types/workspace";
 import type { ModuleHistoryEntry } from "../utils/history";
+import type { GenerationProgressPhase } from "./GenerationProgress";
 
 interface ReferenceTransformModulePageProps {
   assetItems: AssetItem[];
@@ -40,6 +42,9 @@ interface ReferenceTransformModulePageProps {
   hideModelSelector?: boolean;
   hidePromptEditor?: boolean;
   imageSize?: "1K" | "2K";
+  progressPhases?: GenerationProgressPhase[];
+  successLabel?: string;
+  errorProgressLabel?: string;
 }
 
 export function ReferenceTransformModulePage({
@@ -68,6 +73,9 @@ export function ReferenceTransformModulePage({
   hideModelSelector = false,
   hidePromptEditor = false,
   imageSize = "1K",
+  progressPhases,
+  successLabel = "已完成",
+  errorProgressLabel = "生成失败",
 }: ReferenceTransformModulePageProps) {
   const templates = getPromptTemplatesByModule(module);
   const initialPrompt = hidePromptEditor
@@ -83,6 +91,7 @@ export function ReferenceTransformModulePage({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
 
   useEffect(() => {
     if (!models.length) return;
@@ -119,6 +128,7 @@ export function ReferenceTransformModulePage({
 
     setLoading(true);
     setError(null);
+    setProgressState("running");
     try {
       const selectedAssetUrls = selectedAssets
         .map((asset) => asset.fileUrl ?? asset.previewUrl ?? asset.storageUrl ?? null)
@@ -161,7 +171,9 @@ export function ReferenceTransformModulePage({
             : selectedAssetUrls,
         prompt,
       });
+      setProgressState("success");
     } catch (submitError) {
+      setProgressState("error");
       setError(submitError instanceof Error ? submitError.message : submitErrorLabel);
     } finally {
       setLoading(false);
@@ -192,7 +204,7 @@ export function ReferenceTransformModulePage({
                     </option>
                   ))}
                 </select>
-                {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
+                {modelError ? <small>{modelError}</small> : null}
               </label>
             ) : null}
 
@@ -207,6 +219,7 @@ export function ReferenceTransformModulePage({
             ) : null}
 
             {error ? <p className="error-text">{error}</p> : null}
+            <GenerationProgress state={progressState} phases={progressPhases} successLabel={successLabel} errorLabel={errorProgressLabel} />
 
             <button className="primary-button align-start" type="button" onClick={handleSubmit} disabled={loading || !selectedModel}>
               {loading ? loadingLabel : submitLabel}
