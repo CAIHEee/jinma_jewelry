@@ -25,25 +25,26 @@ frontend/
 
 ## 后端启动
 
-推荐使用你本机已有的 `rasa` conda 环境。
+推荐使用本项目的 `jinma_jewelry` conda 环境。后端 API 服务负责登录、鉴权、资产、历史、提交任务和查询任务状态。
 
-```powershell
-cd E:\A_GS_project\文生图需求\flux_system\backend
-conda activate rasa
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```bash
+cd /home/chaihe/projects/jinma_jewelry_system/backend
+conda activate jinma_jewelry
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 说明：
 
 - `--host 0.0.0.0` 表示允许局域网其他设备访问后端。
-- 如果只写 `uvicorn app.main:app --reload`，默认会监听 `127.0.0.1:8000`，只能本机访问。
+- 如果只写 `python -m uvicorn app.main:app --reload`，默认会监听 `127.0.0.1:8000`，只能本机访问。
 - 前端开发服务器现在会把 `/api` 请求代理到 `http://127.0.0.1:8000`，所以前后端在同一台机器上运行时也能正常工作。
+- `python -m app.worker` 不是后端 API 服务，它只负责执行 Redis 队列里的任务，不能处理登录接口。
 
 ## 前端启动
 
-```powershell
-cd E:\A_GS_project\文生图需求\flux_system\frontend
+```bash
+cd /home/chaihe/projects/jinma_jewelry_system/frontend
 npm install
 npm run dev
 ```
@@ -83,8 +84,8 @@ Uvicorn running on http://127.0.0.1:8000
 
 说明后端只监听本机。虽然前端代理在同机运行时可以访问，但如果你想从局域网直接访问后端，建议改用：
 
-```powershell
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```bash
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 2. 检查健康接口
@@ -126,16 +127,16 @@ Error: connect ECONNREFUSED 127.0.0.1:8000
 
 解决方式：
 
-```powershell
-cd E:\A_GS_project\文生图需求\flux_system\backend
-conda activate rasa
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```bash
+cd /home/chaihe/projects/jinma_jewelry_system/backend
+conda activate jinma_jewelry
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 然后重启前端：
 
-```powershell
-cd E:\A_GS_project\文生图需求\flux_system\frontend
+```bash
+cd /home/chaihe/projects/jinma_jewelry_system/frontend
 npm run dev
 ```
 
@@ -195,32 +196,66 @@ POST /api/v1/ai/jobs/split-multi-view
 
 ## 单机并发部署
 
-当前阶段不需要额外引入 Nginx 做负载均衡。单机内网部署时，先使用多 Web worker + Redis/RQ 队列 worker：
+当前阶段不需要额外引入 Nginx 做负载均衡。单机内网部署时，需要分别启动 Redis、Web API 服务、队列 Worker。
+
+### 1. 启动 Redis
 
 ```bash
-cd backend
-conda activate jinma_jewelry
-pip install -r requirements.txt
 redis-server
-gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 2
 ```
 
-另开两个终端启动队列 worker：
+如果 Redis 已经作为系统服务启动，并监听 `127.0.0.1:6379`，这一步可以跳过。
+
+### 2. 启动 Web API 服务
+
+开发调试建议先用单 worker + reload：
 
 ```bash
-cd backend
+cd /home/chaihe/projects/jinma_jewelry_system/backend
+conda activate jinma_jewelry
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+多人内网测试或准生产环境可以改用多 Web worker：
+
+```bash
+cd /home/chaihe/projects/jinma_jewelry_system/backend
+conda activate jinma_jewelry
+python -m gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 2
+```
+
+### 3. 启动队列 Worker
+
+队列 Worker 负责执行 AI 生成任务、上传 OSS、写资产和历史记录。它不提供 Web API，也不能处理登录接口。
+
+Worker 1：
+
+```bash
+cd /home/chaihe/projects/jinma_jewelry_system/backend
 conda activate jinma_jewelry
 python -m app.worker
 ```
 
+Worker 2：
+
 ```bash
-cd backend
+cd /home/chaihe/projects/jinma_jewelry_system/backend
 conda activate jinma_jewelry
 python -m app.worker
+```
+
+### 4. 启动前端
+
+```bash
+cd /home/chaihe/projects/jinma_jewelry_system/frontend
+npm run dev
 ```
 
 说明：
 
+- `python -m uvicorn app.main:app ...` 或 `python -m gunicorn ...` 是后端 API 服务，必须启动，否则登录和所有 `/api` 接口都不可用。
+- `python -m app.worker` 是队列消费者，只执行 Redis 里的任务，不能单独作为后端服务使用。
 - 旧同步生图接口仍保留，可用于回滚和对比。
 - 新任务接口会立即返回 `job_id`，再通过 `GET /api/v1/ai/jobs/{job_id}` 查询 `queued`、`running`、`uploading`、`succeeded`、`failed`。
 - 普通用户默认最多同时 1 个任务，root 默认最多 3 个任务，可通过 `QUEUE_USER_MAX_ACTIVE_JOBS` 和 `QUEUE_ROOT_MAX_ACTIVE_JOBS` 调整。
@@ -249,10 +284,12 @@ DATABASE_URL=mysql+pymysql://root:123456@192.168.10.150:3306/jinma
 ## 运行顺序建议
 
 1. 启动 MySQL，确认 `jinma` 数据库存在。
-2. 启动后端。
-3. 访问 `http://127.0.0.1:8000/health` 确认后端正常。
-4. 启动前端。
-5. 访问 `http://192.168.10.243:5173` 进行局域网调试。
+2. 启动 Redis，确认监听 `127.0.0.1:6379`。
+3. 启动 Web API 服务：`python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`。
+4. 访问 `http://127.0.0.1:8000/health` 确认后端正常。
+5. 启动 1-2 个队列 Worker：`python -m app.worker`。
+6. 启动前端：`npm run dev`。
+7. 访问 `http://192.168.10.243:5173` 进行局域网调试。
 
 ## 当前主要功能
 

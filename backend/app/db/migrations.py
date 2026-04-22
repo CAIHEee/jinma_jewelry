@@ -23,6 +23,7 @@ def run_migrations(engine: Engine) -> None:
         ("20260420_auth_assets", _apply_auth_assets_migration),
         ("20260422_user_soft_delete", _apply_user_soft_delete_migration),
         ("20260422_generation_jobs", _apply_generation_jobs_migration),
+        ("20260422_generation_jobs_longtext", _apply_generation_jobs_longtext_migration),
     ]
 
     for version, migration in migrations:
@@ -264,3 +265,12 @@ def _apply_generation_jobs_migration(engine: Engine) -> None:
     _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_status", "status")
     _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_user_status", "user_id, status")
     _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_feature_status", "feature_key, status")
+
+
+def _apply_generation_jobs_longtext_migration(engine: Engine) -> None:
+    if engine.dialect.name != "mysql" or not inspect(engine).has_table("generation_jobs"):
+        return
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE generation_jobs MODIFY COLUMN request_json LONGTEXT NULL"))
+        connection.execute(text("ALTER TABLE generation_jobs MODIFY COLUMN result_json LONGTEXT NULL"))
+        connection.execute(text("ALTER TABLE generation_jobs MODIFY COLUMN error_message LONGTEXT NULL"))

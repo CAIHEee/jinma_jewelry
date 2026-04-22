@@ -42,9 +42,16 @@ function isBrowserObjectUrl(value: string | null | undefined): value is string {
   return typeof value === "string" && value.startsWith("blob:");
 }
 
+function isCustomStorageUrl(value: string | null | undefined): value is string {
+  return typeof value === "string" && (value.startsWith("oss://") || value.startsWith("local://"));
+}
+
 function resolveStableAssetUrl(storageUrl: string | null | undefined, fallbackUrl: string | null | undefined, filename?: string | null): string | null {
   if (storageUrl) {
     return buildAssetContentUrl(storageUrl, filename);
+  }
+  if (isCustomStorageUrl(fallbackUrl)) {
+    return buildAssetContentUrl(fallbackUrl, filename);
   }
   return fallbackUrl ?? null;
 }
@@ -377,7 +384,7 @@ function extractSourceImageUrl(metadata: Record<string, unknown> | null): string
   }
 
   if (typeof metadata.source_image_url === "string" && metadata.source_image_url) {
-    return metadata.source_image_url;
+    return isCustomStorageUrl(metadata.source_image_url) ? buildAssetContentUrl(metadata.source_image_url) : metadata.source_image_url;
   }
 
   const sourceImages = extractSourceImages(metadata);

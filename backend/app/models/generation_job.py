@@ -41,4 +41,4 @@ class GenerationJob(Base):
         nullable=False,
     )
 
-    user = relationship("User")
+    user = relationship("User", back_populates="generation_jobs")

@@ -32,7 +32,7 @@ class User(Base):
         nullable=False,
     )
 
-    generation_jobs = relationship("GenerationJob")
+    generation_jobs = relationship("GenerationJob", back_populates="user")
     generation_records = relationship("GenerationRecord", back_populates="user")
     owned_assets = relationship("AssetRecord", foreign_keys="AssetRecord.owner_user_id", back_populates="owner")
     published_assets = relationship("AssetRecord", foreign_keys="AssetRecord.published_by_user_id", back_populates="publisher")

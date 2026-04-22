@@ -298,11 +298,10 @@ class AIService:
                 metadata = metadata.model_copy(
                     update={
                         "source_images": [
-                            {
-                                "filename": metadata.filenames[index] if index < len(metadata.filenames) else f"image-{index + 1}.png",
-                                "source_image_url": url,
-                                "preview_url": url,
-                            }
+                            self._build_source_image_reference(
+                                url=url,
+                                filename=metadata.filenames[index] if index < len(metadata.filenames) else f"image-{index + 1}.png",
+                            )
                             for index, url in enumerate(normalized_urls)
                         ]
                     }
@@ -436,14 +435,10 @@ class AIService:
                         "image_count": len(normalized_urls),
                         "filename": filenames[0],
                         "filenames": filenames,
-                        "source_image_url": normalized_urls[0],
-                        "source_image_storage_url": None,
+                        "source_image_url": self._resolve_source_preview_url(normalized_urls[0], filenames[0]),
+                        "source_image_storage_url": normalized_urls[0] if self._is_custom_storage_url(normalized_urls[0]) else None,
                         "source_images": [
-                            {
-                                "filename": filenames[index],
-                                "source_image_url": url,
-                                "preview_url": url,
-                            }
+                            self._build_source_image_reference(url=url, filename=filenames[index])
                             for index, url in enumerate(normalized_urls)
                         ],
                     }
@@ -1773,6 +1768,24 @@ class AIService:
         if filename:
             query["filename"] = filename
         return f"/api/v1/assets/content?{urlencode(query)}"
+
+    def _is_custom_storage_url(self, value: str | None) -> bool:
+        return bool(value and value.startswith(("oss://", "local://")))
+
+    def _resolve_source_preview_url(self, url: str, filename: str | None = None) -> str:
+        if self._is_custom_storage_url(url):
+            return self._build_asset_content_url(url, filename)
+        return url
+
+    def _build_source_image_reference(self, *, url: str, filename: str) -> dict[str, object]:
+        storage_url = url if self._is_custom_storage_url(url) else None
+        preview_url = self._resolve_source_preview_url(url, filename)
+        return {
+            "filename": filename,
+            "source_image_url": preview_url,
+            "storage_url": storage_url,
+            "preview_url": preview_url,
+        }
 
     async def _store_generated_asset(
         self,
