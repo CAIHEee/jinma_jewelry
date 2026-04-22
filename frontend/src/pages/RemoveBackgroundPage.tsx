@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { FloatingToast } from "../components/FloatingToast";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { assetItemToFile, submitRemoveBackground } from "../services/api";
 import type { AssetItem } from "../types/mockData";
@@ -44,6 +45,9 @@ export function RemoveBackgroundPage({ assetItems }: RemoveBackgroundPageProps) 
   }, [resultUrl]);
 
   async function handleRemoveBackground() {
+    if (processing) {
+      return;
+    }
     setError(null);
     setProcessing(true);
     try {
@@ -54,6 +58,9 @@ export function RemoveBackgroundPage({ assetItems }: RemoveBackgroundPageProps) 
 
       if (resultUrl) URL.revokeObjectURL(resultUrl);
       const whiteBlob = await submitRemoveBackground({ file });
+      if (!whiteBlob.size) {
+        throw new Error("去除背景完成，但没有返回有效图片，请稍后重试。");
+      }
 
       setResultUrl(URL.createObjectURL(whiteBlob));
       setDownloadName(buildWhiteDownloadName(file.name));
@@ -66,6 +73,7 @@ export function RemoveBackgroundPage({ assetItems }: RemoveBackgroundPageProps) 
 
   return (
     <div className="page-stack compact-page split-page">
+      <FloatingToast message={error} />
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy image-edit-layout">
           <div className="form-card parameter-scroll-panel image-edit-form compact-parameter-panel">
@@ -80,8 +88,6 @@ export function RemoveBackgroundPage({ assetItems }: RemoveBackgroundPageProps) 
             <div className="hint-box remove-bg-hint-box">
               该工具由服务器临时处理图片，不保存历史记录，也不会写入资产库。输出结果为白色背景图片，可直接下载使用。
             </div>
-
-            {error ? <p className="error-text">{error}</p> : null}
 
             <div className="inline-action-row">
               <button className="primary-button align-start" type="button" onClick={handleRemoveBackground} disabled={processing || !sourcePreviewUrl}>

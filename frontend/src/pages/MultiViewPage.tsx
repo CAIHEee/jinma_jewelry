@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { FloatingToast } from "../components/FloatingToast";
 import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
@@ -72,6 +73,9 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
   }, [uploadedPreviewUrl]);
 
   async function handleGenerate() {
+    if (loading) {
+      return;
+    }
     if (!selectedModel) {
       setError("当前没有可用的多视图模型。");
       return;
@@ -102,6 +106,9 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         prompt: defaultPrompt,
         feature: "multi_view",
       });
+      if (!response.image_url) {
+        throw new Error("生成完成，但没有返回多视图结果图片，请稍后重试。");
+      }
 
       setResult(response);
       setSelectedHistoryId(null);
@@ -126,6 +133,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
 
   return (
     <div className="page-stack compact-page split-page multi-view-page">
+      <FloatingToast message={error} />
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy single-result-layout">
           <div className="form-card parameter-scroll-panel compact-parameter-panel">
@@ -149,7 +157,6 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
               {modelError ? <small>{modelError}</small> : null}
             </label>
 
-            {error ? <p className="error-text">{error}</p> : null}
             <GenerationProgress state={progressState} phases={progressPhases} successLabel="多视图已完成" errorLabel="多视图生成失败" />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>

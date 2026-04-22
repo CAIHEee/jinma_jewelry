@@ -23,6 +23,7 @@ export function AssetSourcePicker({
   onUploadFilesChange,
   onSelectedAssetsChange,
 }: AssetSourcePickerProps) {
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [sourceType, setSourceType] = useState<"asset" | "upload">(includeUploadOption ? "upload" : "asset");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -134,18 +135,48 @@ export function AssetSourcePicker({
       return;
     }
 
+    const validMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+    const invalidFile = nextFiles.find((file) => file.type && !validMimeTypes.has(file.type));
+    if (invalidFile) {
+      setUploadError(`文件 ${invalidFile.name} 格式不支持，请上传 PNG、JPG 或 WEBP 图片。`);
+      event.target.value = "";
+      return;
+    }
+
+    const oversizedFile = nextFiles.find((file) => file.size > 20 * 1024 * 1024);
+    if (oversizedFile) {
+      setUploadError(`文件 ${oversizedFile.name} 超过 20MB，请压缩后再上传。`);
+      event.target.value = "";
+      return;
+    }
+
+    const dedupedFiles = nextFiles.filter(
+      (file, index, files) => files.findIndex((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified) === index,
+    );
+    if (dedupedFiles.length === 0) {
+      setUploadError("没有可用的新图片可上传。");
+      event.target.value = "";
+      return;
+    }
+
+    setUploadError(null);
+
     setUploadedFiles((current) => {
       if (!allowMultiple) {
-        return nextFiles.slice(0, 1);
+        return dedupedFiles.slice(0, 1);
       }
 
       const merged = [...current];
-      nextFiles.forEach((file) => {
+      dedupedFiles.forEach((file) => {
         const duplicated = merged.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified);
         if (!duplicated) {
           merged.push(file);
         }
       });
+      if (merged.length > 6) {
+        setUploadError("最多上传 6 张图片，请先删除部分图片后再继续。");
+        return merged.slice(0, 6);
+      }
       return merged;
     });
 
@@ -203,6 +234,7 @@ export function AssetSourcePicker({
             <input type="file" accept="image/png,image/jpeg,image/webp" multiple={allowMultiple} onChange={handleUploadChange} />
             <strong>{uploadLabel ?? (allowMultiple ? "上传多张参考图" : "上传单张参考图")}</strong>
           </label>
+          {uploadError ? <p className="error-text">{uploadError}</p> : null}
 
           {uploadedFiles.length > 0 ? (
             <details className="drawer-panel inner-drawer source-upload-drawer" open>

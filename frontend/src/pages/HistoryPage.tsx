@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { FloatingToast } from "../components/FloatingToast";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import type { PersistedHistoryItem } from "../types/history";
 import type { WorkspaceRun } from "../types/workspace";
@@ -27,7 +28,9 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
   const [keyword, setKeyword] = useState("");
   const [activeFilter, setActiveFilter] = useState("全部");
   const [previewState, setPreviewState] = useState<PreviewState | null>(null);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<ModuleHistoryEntry | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const normalizedKeyword = keyword.trim().toLowerCase();
 
@@ -64,14 +67,19 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
     });
   }
 
-  async function handleDelete(item: ModuleHistoryEntry) {
-    if (item.source !== "persisted" || !item.persistedId || !onDeleteHistory) {
+  async function confirmDeleteHistory() {
+    const item = pendingDeleteItem;
+    if (!item || item.source !== "persisted" || !item.persistedId || !onDeleteHistory) {
       return;
     }
 
     setDeletingHistoryId(item.persistedId);
     try {
       await onDeleteHistory(item.persistedId);
+      setPendingDeleteItem(null);
+      setToast({ type: "success", message: "历史记录已删除" });
+    } catch (error) {
+      setToast({ type: "error", message: error instanceof Error ? error.message : "删除历史记录失败" });
     } finally {
       setDeletingHistoryId(null);
     }
@@ -158,7 +166,7 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
                           <button
                             className="secondary-button"
                             type="button"
-                            onClick={() => void handleDelete(item)}
+                            onClick={() => setPendingDeleteItem(item)}
                             disabled={deletingHistoryId === item.persistedId}
                           >
                             {deletingHistoryId === item.persistedId ? "删除中..." : "删除记录"}
@@ -173,7 +181,7 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
                         <button
                           className="secondary-button"
                           type="button"
-                          onClick={() => void handleDelete(item)}
+                          onClick={() => setPendingDeleteItem(item)}
                           disabled={deletingHistoryId === item.persistedId}
                         >
                           {deletingHistoryId === item.persistedId ? "删除中..." : "删除记录"}
@@ -202,6 +210,46 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
           onClose={() => setPreviewState(null)}
         />
       ) : null}
+
+      {pendingDeleteItem ? (
+        <div className="admin-modal-backdrop" role="presentation" onClick={() => setPendingDeleteItem(null)}>
+          <div className="admin-modal-card" role="dialog" aria-modal="true" aria-label="删除历史记录确认" onClick={(event) => event.stopPropagation()}>
+            <div className="admin-modal-header">
+              <div>
+                <p className="eyebrow">历史记录</p>
+                <h3>删除历史记录</h3>
+              </div>
+              <button className="template-close-button" type="button" onClick={() => setPendingDeleteItem(null)} aria-label="关闭删除历史记录弹窗">
+                x
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <p className="muted">确定删除这条历史记录吗？该操作只删除历史记录，不会删除资产管理中的资产图片。</p>
+              <div className="panel-subcard compact">
+                <strong>{pendingDeleteItem.title}</strong>
+                <p className="muted">
+                  {getHistoryKindLabel(pendingDeleteItem.kind)} / {formatHistoryTimestamp(pendingDeleteItem.createdAt)}
+                </p>
+              </div>
+            </div>
+            <div className="admin-modal-actions">
+              <button className="secondary-button compact-button" type="button" onClick={() => setPendingDeleteItem(null)} disabled={Boolean(deletingHistoryId)}>
+                取消
+              </button>
+              <button
+                className="primary-button compact-button"
+                type="button"
+                onClick={() => void confirmDeleteHistory()}
+                disabled={deletingHistoryId === pendingDeleteItem.persistedId}
+              >
+                {deletingHistoryId === pendingDeleteItem.persistedId ? "删除中..." : "确认删除"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <FloatingToast message={toast?.message ?? null} type={toast?.type ?? "error"} />
     </div>
   );
 }

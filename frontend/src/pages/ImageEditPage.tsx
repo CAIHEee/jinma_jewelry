@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { FloatingToast } from "../components/FloatingToast";
 import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
@@ -71,12 +72,19 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
   }, [uploadedPreviewUrl]);
 
   async function handleSubmit() {
+    if (loading) {
+      return;
+    }
     if (!selectedModel) {
       setError("当前没有可用的图生图模型。");
       return;
     }
     if (files.length === 0 && selectedAssets.length === 0) {
       setError("请先选择一张线稿或草图。");
+      return;
+    }
+    if (!prompt.trim()) {
+      setError("请输入转写提示词。");
       return;
     }
 
@@ -94,9 +102,12 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         sourceImageUrl: inputFile ? undefined : selectedAssetUrl ?? undefined,
         sourceImageName: inputFile ? undefined : selectedAsset?.name,
         model: selectedModel.id,
-        prompt,
+        prompt: prompt.trim(),
         feature: "sketch_to_realistic",
       });
+      if (!response.image_url) {
+        throw new Error("生成完成，但没有返回结果图片，请稍后重试。");
+      }
 
       setResult(response);
       setSelectedHistoryId(null);
@@ -108,7 +119,7 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         status: response.status,
         imageUrl: response.image_url,
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
-        prompt,
+        prompt: prompt.trim(),
       });
       setProgressState("success");
     } catch (submitError) {
@@ -121,6 +132,7 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
 
   return (
     <div className="page-stack compact-page split-page">
+      <FloatingToast message={error} />
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy image-edit-layout">
           <div className="form-card parameter-scroll-panel image-edit-form compact-parameter-panel">
@@ -152,7 +164,6 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
               <AutoResizeTextarea className="prompt-textarea" rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
             </label>
 
-            {error ? <p className="error-text">{error}</p> : null}
             <GenerationProgress state={progressState} phases={progressPhases} successLabel="写实图已完成" errorLabel="写实转绘失败" />
 
             <button className="primary-button align-start" type="button" onClick={handleSubmit} disabled={loading || !selectedModel}>

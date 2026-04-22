@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { FloatingToast } from "../components/FloatingToast";
 import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
@@ -104,6 +105,9 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) {
+      return;
+    }
     setError(null);
 
     if (!selectedModel) {
@@ -113,6 +117,10 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
 
     if (files.length + selectedAssets.length < 2) {
       setError("请至少选择两张参考图。");
+      return;
+    }
+    if (!prompt.trim()) {
+      setError("请输入融合提示词。");
       return;
     }
 
@@ -132,11 +140,14 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
         sourceImageUrls: submitSourceImageUrls,
         sourceImageNames: submitSourceImageNames,
         model: selectedModel.id,
-        prompt,
+        prompt: prompt.trim(),
         mode,
         primaryImageIndex,
         strength,
       });
+      if (!response.image_url) {
+        throw new Error("融合完成，但没有返回结果图片，请稍后重试。");
+      }
 
       setResult(response);
       setSelectedHistoryId(null);
@@ -150,7 +161,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
         sourceImageUrl: selectedInputItems[primaryImageIndex]?.previewUrl ?? null,
         sourceImages: selectedInputItems.map((item) => item.previewUrl).filter((item): item is string => Boolean(item)),
         primaryImageIndex,
-        prompt,
+        prompt: prompt.trim(),
       });
       setProgressState("success");
     } catch (submitError) {
@@ -163,6 +174,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
 
   return (
     <div className="page-stack compact-page split-page">
+      <FloatingToast message={error} />
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy single-result-layout">
           <form className="form-card parameter-scroll-panel compact-parameter-panel" onSubmit={handleSubmit}>
@@ -251,7 +263,6 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
               </div>
             </details>
 
-            {error ? <p className="error-text">{error}</p> : null}
             <GenerationProgress state={progressState} phases={progressPhases} successLabel="融合已完成" errorLabel="融合失败" />
 
             <button className="primary-button align-start" type="submit" disabled={isSubmitting || !selectedModel}>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { FloatingToast } from "../components/FloatingToast";
 import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
@@ -74,6 +75,9 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
   }, [uploadedPreviewUrl]);
 
   async function handleGenerate() {
+    if (loading) {
+      return;
+    }
     if (!selectedModel) {
       setError("当前没有可用的转灰度图模型。");
       return;
@@ -104,6 +108,9 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
         prompt: defaultPrompt,
         feature: "grayscale_relief",
       });
+      if (!response.image_url) {
+        throw new Error("生成完成，但没有返回灰度结果图片，请稍后重试。");
+      }
 
       setResult(response);
       setSelectedHistoryId(null);
@@ -128,6 +135,7 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
 
   return (
     <div className="page-stack compact-page split-page">
+      <FloatingToast message={error} />
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy image-edit-layout">
           <div className="form-card parameter-scroll-panel image-edit-form compact-parameter-panel">
@@ -151,7 +159,6 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
               {modelError ? <small>{modelError}</small> : null}
             </label>
 
-            {error ? <p className="error-text">{error}</p> : null}
             <GenerationProgress state={progressState} phases={progressPhases} successLabel="灰度图已完成" errorLabel="灰度转换失败" />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>

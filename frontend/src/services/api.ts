@@ -30,6 +30,61 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   });
 }
 
+function normalizeApiErrorMessage(rawText: string, fallback = "请求失败"): string {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+
+  try {
+    const payload = JSON.parse(trimmed) as unknown;
+    if (typeof payload === "string" && payload.trim()) {
+      return payload;
+    }
+    if (payload && typeof payload === "object") {
+      if ("detail" in payload) {
+        const detail = (payload as { detail?: unknown }).detail;
+        if (typeof detail === "string" && detail.trim()) {
+          return detail;
+        }
+        if (Array.isArray(detail) && detail.length > 0) {
+          const firstDetail = detail[0];
+          if (typeof firstDetail === "string" && firstDetail.trim()) {
+            return firstDetail;
+          }
+          if (firstDetail && typeof firstDetail === "object" && "msg" in firstDetail) {
+            const msg = (firstDetail as { msg?: unknown }).msg;
+            if (typeof msg === "string" && msg.trim()) {
+              return msg;
+            }
+          }
+        }
+      }
+      if ("message" in payload) {
+        const message = (payload as { message?: unknown }).message;
+        if (typeof message === "string" && message.trim()) {
+          return message;
+        }
+      }
+      if ("error" in payload) {
+        const error = (payload as { error?: unknown }).error;
+        if (typeof error === "string" && error.trim()) {
+          return error;
+        }
+      }
+    }
+  } catch {
+    // Keep the original text fallback below.
+  }
+
+  return trimmed;
+}
+
+async function throwApiError(response: Response, fallback: string): Promise<never> {
+  const errorText = await response.text();
+  throw new Error(normalizeApiErrorMessage(errorText, fallback));
+}
+
 function isBlobUrl(value: string) {
   return value.startsWith("blob:");
 }
@@ -48,8 +103,7 @@ export function buildAssetContentUrl(storageUrl: string, filename?: string | nul
 
 async function handleJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Request failed");
+    await throwApiError(response, "请求失败");
   }
   return (await response.json()) as T;
 }
@@ -80,8 +134,7 @@ export async function registerUser(payload: {
 export async function logout(): Promise<void> {
   const response = await apiFetch(buildApiUrl("/auth/logout"), { method: "POST" });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Logout failed");
+    await throwApiError(response, "退出登录失败");
   }
 }
 
@@ -192,8 +245,7 @@ export async function submitRemoveBackground(payload: { file?: File | null; sour
     body: formData,
   });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Remove background failed");
+    await throwApiError(response, "去除背景失败");
   }
   return response.blob();
 }
@@ -243,16 +295,14 @@ export async function unpublishPersistedAsset(assetId: string): Promise<Persiste
 export async function deletePersistedAsset(assetId: string): Promise<void> {
   const response = await apiFetch(buildApiUrl(`/assets/${assetId}`), { method: "DELETE" });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Delete asset failed");
+    await throwApiError(response, "删除资产失败");
   }
 }
 
 export async function deletePersistedHistory(historyId: string): Promise<void> {
   const response = await apiFetch(buildApiUrl(`/history/${historyId}`), { method: "DELETE" });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Delete history failed");
+    await throwApiError(response, "删除历史记录失败");
   }
 }
 
@@ -301,8 +351,7 @@ export async function resetAdminUserPassword(userId: string, password: string): 
     body: JSON.stringify({ password }),
   });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Password reset failed");
+    await throwApiError(response, "重置密码失败");
   }
 }
 
@@ -320,8 +369,7 @@ export async function updateAdminUserPermissions(userId: string, items: ModulePe
 export async function deleteAdminUser(userId: string): Promise<void> {
   const response = await apiFetch(buildApiUrl(`/admin/users/${userId}`), { method: "DELETE" });
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Delete user failed");
+    await throwApiError(response, "删除用户失败");
   }
 }
 

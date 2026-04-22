@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
+import { FloatingToast } from "../components/FloatingToast";
 import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
@@ -61,8 +62,15 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
   const previewResultUrl = activeHistory?.imageUrl ?? result?.image_url ?? null;
 
   async function handleGenerate() {
+    if (loading) {
+      return;
+    }
     if (!selectedModel) {
       setError("当前没有可用的文生图模型。");
+      return;
+    }
+    if (!prompt.trim()) {
+      setError("请输入提示词。");
       return;
     }
 
@@ -72,12 +80,15 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
 
     try {
       const response = await submitTextToImage({
-        prompt,
+        prompt: prompt.trim(),
         model: selectedModel.id,
         aspect_ratio: aspectRatio,
         size: "1024x1024",
         image_size: imageSize,
       });
+      if (!response.image_url) {
+        throw new Error("生成完成，但没有返回结果图片，请稍后重试。");
+      }
 
       setResult(response);
       setSelectedHistoryId(null);
@@ -88,7 +99,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
         provider: response.provider,
         status: response.status,
         imageUrl: response.image_url,
-        prompt,
+        prompt: prompt.trim(),
       });
       setProgressState("success");
     } catch (submitError) {
@@ -101,6 +112,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
 
   return (
     <div className="page-stack compact-page split-page">
+      <FloatingToast message={error} />
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy single-result-layout">
           <div className="form-card parameter-scroll-panel text-to-image-form compact-parameter-panel">
@@ -144,7 +156,6 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
               <AutoResizeTextarea className="prompt-textarea" rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
             </label>
 
-            {error ? <p className="error-text">{error}</p> : null}
             <GenerationProgress state={progressState} phases={progressPhases} successLabel="图片已完成" errorLabel="文生图失败" />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>

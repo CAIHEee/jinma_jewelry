@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
+import { FloatingToast } from "../components/FloatingToast";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { splitMultiViewImage, uploadInputAsset } from "../services/api";
@@ -107,6 +108,9 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
   }
 
   async function handleSplit() {
+    if (loading) {
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -126,6 +130,9 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
         gap_x_ratio: gapXRatio,
         gap_y_ratio: gapYRatio,
       });
+      if (!response.items.length || !response.items.some((item) => item.image_url)) {
+        throw new Error("切图完成，但没有返回有效结果，请调整参数后重试。");
+      }
 
       setSplitResult(response);
       setSelectedHistoryId(null);
@@ -164,6 +171,7 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
 
   return (
     <div className="page-stack compact-page split-page multi-view-page">
+      <FloatingToast message={error} />
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy single-result-layout">
           <div className="form-card parameter-scroll-panel compact-parameter-panel">
@@ -203,8 +211,6 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
                 </div>
               </div>
             </details>
-
-            {error ? <p className="error-text">{error}</p> : null}
 
             <button className="primary-button align-start" type="button" onClick={handleSplit} disabled={loading}>
               {loading ? "切图中..." : "开始切图"}

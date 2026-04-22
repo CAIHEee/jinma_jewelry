@@ -17,22 +17,57 @@ export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  function validateForm(): string | null {
+    const trimmedUsername = username.trim();
+    const trimmedDisplayName = displayName.trim();
+
+    if (!trimmedUsername) {
+      return "请输入用户名。";
+    }
+    if (trimmedUsername.length < 2) {
+      return "用户名至少 2 位。";
+    }
+    if (trimmedUsername.length > 64) {
+      return "用户名不能超过 64 位。";
+    }
+    if (!password) {
+      return "请输入密码。";
+    }
+    if (mode === "register") {
+      if (password.length < 6) {
+        return "密码至少 6 位。";
+      }
+      if (trimmedDisplayName.length > 128) {
+        return "显示名不能超过 128 位。";
+      }
+      if (!confirmPassword) {
+        return "请再次输入确认密码。";
+      }
+      if (password !== confirmPassword) {
+        return "两次输入的密码不一致。";
+      }
+    }
+    return null;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) {
+      return;
+    }
     setLocalError(null);
-    if (mode === "register") {
-      if (password !== confirmPassword) {
-        setLocalError("两次输入的密码不一致。");
-        return;
-      }
+    const validationError = validateForm();
+    if (validationError) {
+      setLocalError(validationError);
+      return;
     }
     setSubmitting(true);
     try {
       if (mode === "login") {
-        await onLogin(username, password);
+        await onLogin(username.trim(), password);
       } else {
         await onRegister({
-          username,
+          username: username.trim(),
           password,
           displayName: displayName.trim() || undefined,
         });
@@ -67,22 +102,62 @@ export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
           <form className="page-stack login-form" onSubmit={handleSubmit}>
             <label className="input-group compact-input-group">
               <span>用户名</span>
-              <input className="search-input login-input" value={username} onChange={(event) => setUsername(event.target.value)} placeholder={mode === "login" ? "请输入用户名" : "注册后用于登录"} />
+              <input
+                className="search-input login-input"
+                value={username}
+                onChange={(event) => {
+                  setUsername(event.target.value);
+                  if (localError) setLocalError(null);
+                }}
+                placeholder={mode === "login" ? "请输入用户名" : "注册后用于登录"}
+                autoComplete="username"
+                maxLength={64}
+              />
             </label>
             {mode === "register" ? (
               <label className="input-group compact-input-group">
                 <span>显示名</span>
-                <input className="search-input login-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="选填，用于页面展示" />
+                <input
+                  className="search-input login-input"
+                  value={displayName}
+                  onChange={(event) => {
+                    setDisplayName(event.target.value);
+                    if (localError) setLocalError(null);
+                  }}
+                  placeholder="选填，用于页面展示"
+                  autoComplete="nickname"
+                  maxLength={128}
+                />
               </label>
             ) : null}
             <label className="input-group compact-input-group">
               <span>密码</span>
-              <input className="search-input login-input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === "login" ? "请输入密码" : "至少 6 位"} />
+              <input
+                className="search-input login-input"
+                type="password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  if (localError) setLocalError(null);
+                }}
+                placeholder={mode === "login" ? "请输入密码" : "至少 6 位"}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+              />
             </label>
             {mode === "register" ? (
               <label className="input-group compact-input-group">
                 <span>确认密码</span>
-                <input className="search-input login-input" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="请再次输入密码" />
+                <input
+                  className="search-input login-input"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => {
+                    setConfirmPassword(event.target.value);
+                    if (localError) setLocalError(null);
+                  }}
+                  placeholder="请再次输入密码"
+                  autoComplete="new-password"
+                />
               </label>
             ) : null}
             {localError ? <p className="error-text">{localError}</p> : null}
@@ -98,6 +173,7 @@ export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
                 onClick={() => {
                   const nextMode = mode === "login" ? "register" : "login";
                   setMode(nextMode);
+                  setLocalError(null);
                   if (nextMode === "register" && username === "root") {
                     setUsername("");
                   }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AutoResizeTextarea } from "./AutoResizeTextarea";
 import { AssetSourcePicker } from "./AssetSourcePicker";
+import { FloatingToast } from "./FloatingToast";
 import { GenerationProgress } from "./GenerationProgress";
 import { PageGenerationHistory } from "./PageGenerationHistory";
 import { PromptTemplateImporter } from "./PromptTemplateImporter";
@@ -117,12 +118,19 @@ export function ReferenceTransformModulePage({
   }, [uploadedPreviewUrl]);
 
   async function handleSubmit() {
+    if (loading) {
+      return;
+    }
     if (!selectedModel) {
       setError(emptyModelError);
       return;
     }
     if (files.length === 0 && selectedAssets.length === 0) {
       setError(emptyAssetError);
+      return;
+    }
+    if (!hidePromptEditor && !prompt.trim()) {
+      setError(`请输入${promptLabel}。`);
       return;
     }
 
@@ -152,6 +160,9 @@ export function ReferenceTransformModulePage({
         feature,
         imageSize,
       });
+      if (!response.image_url) {
+        throw new Error("生成完成，但没有返回结果图片，请稍后重试。");
+      }
 
       setResult(response);
       setSelectedHistoryId(null);
@@ -169,7 +180,7 @@ export function ReferenceTransformModulePage({
               ? [uploadedPreviewUrl]
               : []
             : selectedAssetUrls,
-        prompt,
+        prompt: prompt.trim(),
       });
       setProgressState("success");
     } catch (submitError) {
@@ -182,6 +193,7 @@ export function ReferenceTransformModulePage({
 
   return (
     <div className="page-stack compact-page split-page">
+      <FloatingToast message={error} />
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy image-edit-layout">
           <div className="form-card parameter-scroll-panel image-edit-form compact-parameter-panel">
@@ -218,7 +230,6 @@ export function ReferenceTransformModulePage({
               </label>
             ) : null}
 
-            {error ? <p className="error-text">{error}</p> : null}
             <GenerationProgress state={progressState} phases={progressPhases} successLabel={successLabel} errorLabel={errorProgressLabel} />
 
             <button className="primary-button align-start" type="button" onClick={handleSubmit} disabled={loading || !selectedModel}>

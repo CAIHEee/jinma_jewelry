@@ -100,6 +100,54 @@ export function AdminPage({
     setPermissionsEditing(false);
   }
 
+  function validateCreateUserForm() {
+    if (!createUserState) return "表单状态无效。";
+    const username = createUserState.username.trim();
+    const displayName = createUserState.display_name.trim();
+    const email = createUserState.email.trim();
+    const password = createUserState.password;
+
+    if (!username || !password.trim()) {
+      return "请填写用户名和初始密码。";
+    }
+    if (username.length < 2) {
+      return "用户名至少 2 位。";
+    }
+    if (username.length > 64) {
+      return "用户名不能超过 64 位。";
+    }
+    if (!/^[A-Za-z0-9._-]+$/.test(username)) {
+      return "用户名仅支持字母、数字、点、下划线和短横线。";
+    }
+    if (displayName.length > 128) {
+      return "显示名不能超过 128 位。";
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return "邮箱格式不正确。";
+    }
+    if (password.length < 6) {
+      return "初始密码至少 6 位。";
+    }
+    return null;
+  }
+
+  function validateResetPasswordForm() {
+    if (!resetPasswordState) return "表单状态无效。";
+    if (!resetPasswordState.password.trim()) {
+      return "请输入新密码。";
+    }
+    if (resetPasswordState.password.length < 6) {
+      return "新密码至少 6 位。";
+    }
+    if (!resetPasswordState.confirmPassword.trim()) {
+      return "请再次输入确认密码。";
+    }
+    if (resetPasswordState.password !== resetPasswordState.confirmPassword) {
+      return "两次输入的密码不一致。";
+    }
+    return null;
+  }
+
   function syncPermissions(user: AdminUser) {
     if (selectedUser?.id === user.id) return;
     if (hasUnsavedPermissionChanges) {
@@ -148,9 +196,10 @@ export function AdminPage({
   }
 
   async function handleCreateUser() {
-    if (!createUserState) return;
-    if (!createUserState.username.trim() || !createUserState.password.trim()) {
-      setCreateUserState((current) => (current ? { ...current, error: "请填写用户名和初始密码。" } : current));
+    if (!createUserState || createUserState.submitting) return;
+    const validationError = validateCreateUserForm();
+    if (validationError) {
+      setCreateUserState((current) => (current ? { ...current, error: validationError } : current));
       return;
     }
 
@@ -200,13 +249,10 @@ export function AdminPage({
   }
 
   async function handleResetPasswordSubmit() {
-    if (!resetPasswordState) return;
-    if (!resetPasswordState.password.trim()) {
-      setResetPasswordState((current) => (current ? { ...current, error: "请输入新密码。" } : current));
-      return;
-    }
-    if (resetPasswordState.password !== resetPasswordState.confirmPassword) {
-      setResetPasswordState((current) => (current ? { ...current, error: "两次输入的密码不一致。" } : current));
+    if (!resetPasswordState || resetPasswordState.submitting) return;
+    const validationError = validateResetPasswordForm();
+    if (validationError) {
+      setResetPasswordState((current) => (current ? { ...current, error: validationError } : current));
       return;
     }
 
