@@ -113,3 +113,26 @@ export interface MultiViewSplitResponse {
   gap_y_ratio: number;
   items: MultiViewSplitItem[];
 }
+
+export type GenerationJobStatus = "queued" | "running" | "uploading" | "succeeded" | "failed";
+
+export interface GenerationJobAccepted {
+  job_id: string;
+  status: GenerationJobStatus;
+  feature: string;
+  message: string;
+}
+
+export interface GenerationJobStatusResponse {
+  job_id: string;
+  feature: string;
+  status: GenerationJobStatus;
+  model?: string | null;
+  prompt?: string | null;
+  message: string;
+  error_message?: string | null;
+  result?: Record<string, unknown> | null;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+}

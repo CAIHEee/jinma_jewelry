@@ -3,6 +3,8 @@ import type { CurrentUser, LoginResponse, ModulePermissionItem } from "../types/
 import type {
   FusionRequest,
   FusionResult,
+  GenerationJobAccepted,
+  GenerationJobStatusResponse,
   GenerationResult,
   ModelCatalogResponse,
   MultiViewSplitRequest,
@@ -108,6 +110,43 @@ async function handleJsonResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function fetchGenerationJob(jobId: string): Promise<GenerationJobStatusResponse> {
+  const response = await apiFetch(buildApiUrl(`/ai/jobs/${jobId}`), { cache: "no-store" });
+  return handleJsonResponse<GenerationJobStatusResponse>(response);
+}
+
+async function waitForGenerationJobResult<T>(
+  jobId: string,
+  fallbackError: string,
+  pollMs = 1500,
+  timeoutMs = 15 * 60 * 1000,
+): Promise<T> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const job = await fetchGenerationJob(jobId);
+
+    if (job.status === "failed") {
+      throw new Error(job.error_message || job.message || fallbackError);
+    }
+
+    if (job.status === "succeeded") {
+      if (isPlainObject(job.result)) {
+        return job.result as T;
+      }
+      throw new Error("任务已完成，但没有返回有效结果。");
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, pollMs));
+  }
+
+  throw new Error("任务等待超时，请稍后到历史记录中查看结果。");
+}
+
 export async function login(username: string, password: string): Promise<LoginResponse> {
   const response = await apiFetch(buildApiUrl("/auth/login"), {
     method: "POST",
@@ -149,12 +188,13 @@ export async function fetchModelCatalog(): Promise<ModelCatalogResponse> {
 }
 
 export async function submitTextToImage(payload: TextToImageRequest): Promise<GenerationResult> {
-  const response = await apiFetch(buildApiUrl("/ai/text-to-image"), {
+  const response = await apiFetch(buildApiUrl("/ai/jobs/text-to-image"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return handleJsonResponse<GenerationResult>(response);
+  const accepted = await handleJsonResponse<GenerationJobAccepted>(response);
+  return waitForGenerationJobResult<GenerationResult>(accepted.job_id, "图片生成失败");
 }
 
 export async function submitFusionJob(payload: FusionRequest): Promise<FusionResult> {
@@ -172,11 +212,12 @@ export async function submitFusionJob(payload: FusionRequest): Promise<FusionRes
   formData.append("primary_image_index", String(payload.primaryImageIndex));
   formData.append("strength", String(payload.strength));
 
-  const response = await apiFetch(buildApiUrl("/ai/fuse-images"), {
+  const response = await apiFetch(buildApiUrl("/ai/jobs/fuse-images"), {
     method: "POST",
     body: formData,
   });
-  return handleJsonResponse<FusionResult>(response);
+  const accepted = await handleJsonResponse<GenerationJobAccepted>(response);
+  return waitForGenerationJobResult<FusionResult>(accepted.job_id, "融合任务提交失败");
 }
 
 export async function submitReferenceImageTransform(payload: ReferenceImageTransformRequest): Promise<GenerationResult> {
@@ -202,11 +243,13 @@ export async function submitReferenceModuleTransform(path: string, payload: Refe
   if (typeof payload.strength === "number") formData.append("strength", String(payload.strength));
   if (payload.imageSize) formData.append("image_size", payload.imageSize);
 
-  const response = await apiFetch(buildApiUrl(path), {
+  const jobPath = path.startsWith("/ai/") ? path.replace("/ai/", "/ai/jobs/") : path;
+  const response = await apiFetch(buildApiUrl(jobPath), {
     method: "POST",
     body: formData,
   });
-  return handleJsonResponse<GenerationResult>(response);
+  const accepted = await handleJsonResponse<GenerationJobAccepted>(response);
+  return waitForGenerationJobResult<GenerationResult>(accepted.job_id, "图片生成失败");
 }
 
 export async function submitMultiViewGeneration(payload: ReferenceImageTransformRequest): Promise<GenerationResult> {
@@ -219,20 +262,22 @@ export async function submitMultiViewGeneration(payload: ReferenceImageTransform
   if (payload.negativePrompt) formData.append("negative_prompt", payload.negativePrompt);
   if (typeof payload.strength === "number") formData.append("strength", String(payload.strength));
 
-  const response = await apiFetch(buildApiUrl("/ai/multi-view"), {
+  const response = await apiFetch(buildApiUrl("/ai/jobs/multi-view"), {
     method: "POST",
     body: formData,
   });
-  return handleJsonResponse<GenerationResult>(response);
+  const accepted = await handleJsonResponse<GenerationJobAccepted>(response);
+  return waitForGenerationJobResult<GenerationResult>(accepted.job_id, "多视图生成失败");
 }
 
 export async function splitMultiViewImage(payload: MultiViewSplitRequest): Promise<MultiViewSplitResponse> {
-  const response = await apiFetch(buildApiUrl("/ai/split-multi-view"), {
+  const response = await apiFetch(buildApiUrl("/ai/jobs/split-multi-view"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return handleJsonResponse<MultiViewSplitResponse>(response);
+  const accepted = await handleJsonResponse<GenerationJobAccepted>(response);
+  return waitForGenerationJobResult<MultiViewSplitResponse>(accepted.job_id, "多视图切图失败");
 }
 
 export async function submitRemoveBackground(payload: { file?: File | null; sourceImageUrl?: string | null }): Promise<Blob> {

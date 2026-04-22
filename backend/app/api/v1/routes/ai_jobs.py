@@ -2,7 +2,7 @@ import json
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
-from app.api.deps import require_module
+from app.api.deps import get_current_user, require_module
 from app.core.config import get_settings
 from app.models.user import User
 from app.schemas.ai import FusionMode, FusionRequestMetadata, MultiViewSplitRequest, ReferenceImageRequestMetadata, TextToImageRequest
@@ -49,7 +49,7 @@ async def _store_uploaded_sources(
 
 
 @router.get("/{job_id}", response_model=GenerationJobStatusResponse)
-def get_generation_job(job_id: str, current_user: User = Depends(require_module("history"))) -> GenerationJobStatusResponse:
+def get_generation_job(job_id: str, current_user: User = Depends(get_current_user)) -> GenerationJobStatusResponse:
     return job_service.get_job(job_id=job_id, current_user=current_user)
 
 
