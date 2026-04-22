@@ -54,7 +54,7 @@ class UserService:
 
     def list_users(self) -> AdminUserListResponse:
         with SessionLocal() as session:
-            users = session.execute(select(User).order_by(User.created_at.desc())).scalars().all()
+            users = session.execute(select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc())).scalars().all()
             for user in users:
                 user.module_permissions
             return AdminUserListResponse(items=[self.to_admin_user(user) for user in users])
@@ -81,7 +81,7 @@ class UserService:
                     UserModulePermission(
                         user_id=user.id,
                         module_key=module_key,
-                        is_enabled=False,
+                        is_enabled=True,
                         created_at=now,
                         updated_at=now,
                     )
@@ -96,7 +96,7 @@ class UserService:
     def update_user(self, user_id: str, payload: AdminUserUpdate) -> AdminUser:
         with SessionLocal() as session:
             user = session.get(User, user_id)
-            if user is None:
+            if user is None or user.deleted_at is not None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
             if user.role == "root" and payload.is_disabled:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Root user cannot be disabled.")
@@ -119,10 +119,21 @@ class UserService:
             user.module_permissions
             return self.to_admin_user(user)
 
+    def soft_delete_user(self, user_id: str) -> None:
+        with SessionLocal() as session:
+            user = session.get(User, user_id)
+            if user is None or user.deleted_at is not None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+            if user.role == "root":
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Root user cannot be deleted.")
+            user.is_disabled = 1
+            user.deleted_at = datetime.now(timezone.utc)
+            session.commit()
+
     def reset_password(self, user_id: str, password: str) -> None:
         with SessionLocal() as session:
             user = session.get(User, user_id)
-            if user is None:
+            if user is None or user.deleted_at is not None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
             user.password_hash = hash_password(password)
             session.commit()
@@ -130,7 +141,7 @@ class UserService:
     def update_permissions(self, user_id: str, payload: UserPermissionUpdateRequest) -> list[ModulePermissionItem]:
         with SessionLocal() as session:
             user = session.get(User, user_id)
-            if user is None:
+            if user is None or user.deleted_at is not None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
             if user.role == "root":
                 return self.to_permission_items(user)

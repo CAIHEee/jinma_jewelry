@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
-import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
 import { useModelCatalog } from "../hooks/useModelCatalog";
@@ -27,7 +25,6 @@ interface GrayscaleReliefPageProps {
 
 export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDeleteHistory }: GrayscaleReliefPageProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
-  const [prompt, setPrompt] = useState(defaultPrompt);
   const [model, setModel] = useState(defaultModelId);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([]);
@@ -95,7 +92,7 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
         sourceImageUrl: inputFile ? undefined : selectedAssetUrl ?? undefined,
         sourceImageName: inputFile ? undefined : selectedAsset?.name,
         model: selectedModel.id,
-        prompt,
+        prompt: defaultPrompt,
         feature: "grayscale_relief",
       });
 
@@ -109,7 +106,7 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
         status: response.status,
         imageUrl: response.image_url,
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
-        prompt,
+        prompt: defaultPrompt,
       });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "转灰度图失败");
@@ -141,14 +138,6 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
                 ))}
               </select>
               {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
-            </label>
-
-            <label className="input-group prompt-input-group compact-prompt-group">
-              <div className="prompt-input-header compact-prompt-header">
-                <span>灰度提示词</span>
-                <PromptTemplateImporter templates={templates} onImport={setPrompt} />
-              </div>
-              <AutoResizeTextarea className="prompt-textarea" rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
             </label>
 
             {error ? <p className="error-text">{error}</p> : null}

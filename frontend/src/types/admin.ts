@@ -14,3 +14,12 @@ export interface AdminUser {
 export interface AdminUserListResponse {
   items: AdminUser[];
 }
+
+export interface AdminSystemStatus {
+  backend_status: string;
+  database_status: string;
+  oss_configured: boolean;
+  oss_provider: string;
+  oss_bucket: string | null;
+  environment: string;
+}

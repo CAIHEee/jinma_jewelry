@@ -26,9 +26,10 @@ interface FusionStudioProps {
   onRecordRun: (run: Omit<WorkspaceRun, "id" | "createdAt">) => void;
   assetItems: AssetItem[];
   pageRuns: ModuleHistoryEntry[];
+  onDeleteHistory?: (historyId: string) => Promise<void> | void;
 }
 
-export function FusionStudio({ onRecordRun, assetItems, pageRuns }: FusionStudioProps) {
+export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistory }: FusionStudioProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((item) => item.supports_multi_image_fusion);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([]);
@@ -152,7 +153,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns }: FusionStudio
   return (
     <div className="page-stack compact-page split-page">
       <section className="panel compact-panel">
-        <div className="dashboard-grid result-heavy">
+        <div className="dashboard-grid result-heavy single-result-layout">
           <form className="form-card parameter-scroll-panel compact-parameter-panel" onSubmit={handleSubmit}>
             <label className="input-group compact-input-group">
               <span>融合模型</span>
@@ -272,7 +273,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns }: FusionStudio
                       <div className="result-preview-pane result-preview-pane-single">
                         <span>融合结果</span>
                         <div
-                          className={previewResultUrl ? "generated-result-card compare interactive-result-card" : "generated-result-card compare"}
+                          className={previewResultUrl ? "generated-result-card compare image-edit-result-card interactive-result-card" : "generated-result-card compare image-edit-result-card"}
                           role={previewResultUrl ? "button" : undefined}
                           tabIndex={previewResultUrl ? 0 : undefined}
                           onClick={previewResultUrl ? () => setPreviewOpen(true) : undefined}
@@ -295,7 +296,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns }: FusionStudio
                   ) : (
                     <div className="result-preview-pane result-preview-pane-single">
                       <span>融合结果</span>
-                      <div className="generated-result-card compare">
+                      <div className="generated-result-card compare image-edit-result-card">
                         <div className="compare-card after" />
                       </div>
                     </div>
@@ -304,7 +305,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns }: FusionStudio
               </details>
             </div>
 
-            <PageGenerationHistory title="多图融合历史" items={pageRuns} activeId={selectedHistoryId} onPreview={(item) => setSelectedHistoryId(item.id)} />
+            <PageGenerationHistory title="多图融合历史" items={pageRuns} activeId={selectedHistoryId} onPreview={(item) => setSelectedHistoryId(item.id)} onDeleteHistory={onDeleteHistory} />
           </div>
         </div>
       </section>

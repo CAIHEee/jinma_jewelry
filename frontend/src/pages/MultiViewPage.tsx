@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
-import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
 import { useModelCatalog } from "../hooks/useModelCatalog";
@@ -28,7 +26,6 @@ const defaultPrompt =
 export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHistory }: MultiViewPageProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
   const [model, setModel] = useState(defaultModelId);
-  const [multiViewPrompt, setMultiViewPrompt] = useState(defaultPrompt);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([]);
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -93,7 +90,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         sourceImageUrl: inputFile ? undefined : selectedAssetUrl ?? undefined,
         sourceImageName: inputFile ? undefined : selectedAsset?.name,
         model: selectedModel.id,
-        prompt: multiViewPrompt,
+        prompt: defaultPrompt,
         feature: "multi_view",
       });
 
@@ -107,7 +104,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         status: response.status,
         imageUrl: response.image_url,
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
-        prompt: multiViewPrompt,
+        prompt: defaultPrompt,
       });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "多视图生成失败");
@@ -119,7 +116,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
   return (
     <div className="page-stack compact-page split-page multi-view-page">
       <section className="panel compact-panel">
-        <div className="dashboard-grid result-heavy">
+        <div className="dashboard-grid result-heavy single-result-layout">
           <div className="form-card parameter-scroll-panel compact-parameter-panel">
             <AssetSourcePicker
               title="选择多视图来源"
@@ -139,14 +136,6 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
                 ))}
               </select>
               {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
-            </label>
-
-            <label className="input-group prompt-input-group compact-prompt-group">
-              <div className="prompt-input-header compact-prompt-header">
-                <span>多视图提示词</span>
-                <PromptTemplateImporter templates={multiViewTemplates} onImport={setMultiViewPrompt} />
-              </div>
-              <AutoResizeTextarea className="prompt-textarea" rows={3} value={multiViewPrompt} onChange={(event) => setMultiViewPrompt(event.target.value)} />
             </label>
 
             {error ? <p className="error-text">{error}</p> : null}
@@ -169,7 +158,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
                   <div className="result-preview-pane result-preview-pane-single">
                     <span>多视图结果</span>
                     <div
-                      className={previewResultUrl ? "generated-result-card compare multi-view-result-card interactive-result-card" : "generated-result-card compare multi-view-result-card"}
+                      className={previewResultUrl ? "generated-result-card compare multi-view-result-card image-edit-result-card interactive-result-card" : "generated-result-card compare multi-view-result-card image-edit-result-card"}
                       role={previewResultUrl ? "button" : undefined}
                       tabIndex={previewResultUrl ? 0 : undefined}
                       onClick={previewResultUrl ? () => setPreviewOpen(true) : undefined}

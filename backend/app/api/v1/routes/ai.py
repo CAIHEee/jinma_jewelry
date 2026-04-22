@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 
 from app.api.deps import require_module
 from app.core.config import get_settings
@@ -22,6 +22,18 @@ from app.services.ai_service import AIService
 
 router = APIRouter()
 service = AIService()
+
+
+def _parse_string_array_json(value: str | None, *, field_name: str) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid {field_name}.") from exc
+    if not isinstance(parsed, list) or not all(isinstance(item, str) and item for item in parsed):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{field_name} must be a string array.")
+    return parsed
 
 
 @router.get("/features", response_model=GenerationFeatureCatalog)
@@ -98,25 +110,97 @@ async def _reference_feature_transform(
     return await service.transform_reference_image(file=image, metadata=metadata, current_user=current_user, source_image_url=source_image_url)
 
 
+async def _multi_reference_feature_transform(
+    *,
+    image: UploadFile | None,
+    images: list[UploadFile] | None,
+    prompt: str,
+    model: str,
+    feature: str,
+    source_image_url: str | None,
+    source_image_name: str | None,
+    source_image_urls_json: str | None,
+    source_image_names_json: str | None,
+    negative_prompt: str | None,
+    strength: float,
+    image_size: str,
+    current_user: User,
+) -> GenerationResult:
+    settings = get_settings()
+    source_image_urls = _parse_string_array_json(source_image_urls_json, field_name="source_image_urls_json")
+    source_image_names = _parse_string_array_json(source_image_names_json, field_name="source_image_names_json")
+
+    if source_image_url:
+        source_image_urls = [source_image_url, *source_image_urls]
+        source_image_names = [source_image_name or "reference.png", *source_image_names]
+
+    image_files = [*(images or [])]
+    if image is not None:
+        image_files = [image, *image_files]
+
+    total_images = len(image_files) if image_files else len(source_image_urls)
+    if total_images < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one reference image is required.")
+    if total_images > settings.ai_max_fusion_images:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"At most {settings.ai_max_fusion_images} reference images are supported.",
+        )
+    if source_image_urls and source_image_names and len(source_image_urls) != len(source_image_names):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="source_image_urls_json and source_image_names_json must have the same length.",
+        )
+
+    filenames = (
+        [file.filename or f"reference-{index + 1}.png" for index, file in enumerate(image_files)]
+        if image_files
+        else [source_image_names[index] if index < len(source_image_names) else f"reference-{index + 1}.png" for index in range(len(source_image_urls))]
+    )
+    metadata = ReferenceImageRequestMetadata(
+        model=model,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        feature=feature,
+        strength=strength,
+        image_size=image_size,
+        image_count=total_images,
+        filename=filenames[0],
+        filenames=filenames,
+    )
+    return await service.transform_reference_images(
+        files=image_files,
+        metadata=metadata,
+        current_user=current_user,
+        source_image_urls=source_image_urls,
+    )
+
+
 @router.post("/product-refine", response_model=GenerationResult)
 async def product_refine(
     image: UploadFile | None = File(default=None),
+    images: list[UploadFile] | None = File(default=None),
     prompt: str = Form(...),
     model: str = Form(...),
     source_image_url: str | None = Form(default=None),
     source_image_name: str | None = Form(default=None),
+    source_image_urls_json: str | None = Form(default=None),
+    source_image_names_json: str | None = Form(default=None),
     negative_prompt: str | None = Form(default=None),
     strength: float = Form(default=0.75),
     image_size: str = Form(default="1K"),
     current_user: User = Depends(require_module("product_refine")),
 ) -> GenerationResult:
-    return await _reference_feature_transform(
+    return await _multi_reference_feature_transform(
         image=image,
+        images=images,
         prompt=prompt,
         model=model,
         feature="product_refine",
         source_image_url=source_image_url,
         source_image_name=source_image_name,
+        source_image_urls_json=source_image_urls_json,
+        source_image_names_json=source_image_names_json,
         negative_prompt=negative_prompt,
         strength=strength,
         image_size=image_size,
@@ -127,22 +211,28 @@ async def product_refine(
 @router.post("/gemstone-design", response_model=GenerationResult)
 async def gemstone_design(
     image: UploadFile | None = File(default=None),
+    images: list[UploadFile] | None = File(default=None),
     prompt: str = Form(...),
     model: str = Form(...),
     source_image_url: str | None = Form(default=None),
     source_image_name: str | None = Form(default=None),
+    source_image_urls_json: str | None = Form(default=None),
+    source_image_names_json: str | None = Form(default=None),
     negative_prompt: str | None = Form(default=None),
     strength: float = Form(default=0.75),
     image_size: str = Form(default="1K"),
     current_user: User = Depends(require_module("gemstone_design")),
 ) -> GenerationResult:
-    return await _reference_feature_transform(
+    return await _multi_reference_feature_transform(
         image=image,
+        images=images,
         prompt=prompt,
         model=model,
         feature="gemstone_design",
         source_image_url=source_image_url,
         source_image_name=source_image_name,
+        source_image_urls_json=source_image_urls_json,
+        source_image_names_json=source_image_names_json,
         negative_prompt=negative_prompt,
         strength=strength,
         image_size=image_size,
@@ -209,6 +299,24 @@ async def split_multi_view(
     current_user: User = Depends(require_module("multi_view_split")),
 ) -> MultiViewSplitResponse:
     return await service.split_multi_view_image(payload, current_user=current_user)
+
+
+@router.post("/remove-background", response_class=Response)
+async def remove_background(
+    image: UploadFile | None = File(default=None),
+    source_image_url: str | None = Form(default=None),
+    current_user: User = Depends(require_module("remove_background")),
+) -> Response:
+    image_bytes, media_type = await service.remove_background_image(
+        file=image,
+        source_image_url=source_image_url,
+        current_user=current_user,
+    )
+    return Response(
+        content=image_bytes,
+        media_type=media_type,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.post(

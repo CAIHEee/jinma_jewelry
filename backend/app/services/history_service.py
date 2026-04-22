@@ -71,9 +71,6 @@ class HistoryService:
             if current_user.role != "root" and record.user_id != current_user.id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to delete this history record.")
 
-            metadata = self._load_metadata(record.metadata_json)
-            for storage_url in self._collect_generated_storage_urls(record.storage_url, metadata):
-                self._delete_storage_url(storage_url)
             session.delete(record)
             session.commit()
 

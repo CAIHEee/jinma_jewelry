@@ -38,6 +38,15 @@ class AdminUserListResponse(BaseModel):
     items: list[AdminUser]
 
 
+class AdminSystemStatus(BaseModel):
+    backend_status: str
+    database_status: str
+    oss_configured: bool
+    oss_provider: str
+    oss_bucket: str | None = None
+    environment: str
+
+
 class UserPermissionUpdateItem(BaseModel):
     module_key: str
     is_enabled: bool

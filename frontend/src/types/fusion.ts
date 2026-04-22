@@ -72,8 +72,11 @@ export interface FusionResult {
 
 export interface ReferenceImageTransformRequest {
   file?: File;
+  files?: File[];
   sourceImageUrl?: string;
   sourceImageName?: string;
+  sourceImageUrls?: string[];
+  sourceImageNames?: string[];
   model: string;
   prompt: string;
   feature: string;
@@ -84,6 +87,7 @@ export interface ReferenceImageTransformRequest {
 
 export interface MultiViewSplitRequest {
   image_url: string;
+  source_image_name?: string;
   model: string;
   split_x_ratio: number;
   split_y_ratio: number;

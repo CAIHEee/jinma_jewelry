@@ -14,6 +14,7 @@ interface MultiViewSplitPageProps {
   assetItems: AssetItem[];
   onRecordRun?: (run: Omit<WorkspaceRun, "id" | "createdAt">) => void;
   pageRuns: ModuleHistoryEntry[];
+  onDeleteHistory?: (historyId: string) => Promise<void> | void;
 }
 
 type SplitPreviewTab = "source" | "result";
@@ -35,7 +36,7 @@ function buildSplitDownloadName(item: MultiViewSplitItem | null) {
   return buildDownloadFilename(`multi-view-${item.view}`, item.image_url);
 }
 
-export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns }: MultiViewSplitPageProps) {
+export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDeleteHistory }: MultiViewSplitPageProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([]);
   const [splitPreviewUrl, setSplitPreviewUrl] = useState<string | null>(null);
@@ -114,9 +115,11 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns }: MultiV
       if (!sourceImageUrl) {
         throw new Error("请先选择一张待切图的四宫格多视图图片。");
       }
+      const sourceImageName = selectedAssets[0]?.name ?? files[0]?.name;
 
       const response = await splitMultiViewImage({
         image_url: sourceImageUrl,
+        source_image_name: sourceImageName,
         model: SPLIT_TOOL_ID,
         split_x_ratio: splitXRatio,
         split_y_ratio: splitYRatio,
@@ -240,7 +243,7 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns }: MultiV
                     </div>
 
                     <div
-                      className={sourcePreviewUrl ? "generated-result-card compare interactive-result-card split-stage-card" : "generated-result-card compare split-stage-card"}
+                      className={sourcePreviewUrl ? "generated-result-card compare image-edit-result-card interactive-result-card split-stage-card" : "generated-result-card compare image-edit-result-card split-stage-card"}
                       role={sourcePreviewUrl ? "button" : undefined}
                       tabIndex={sourcePreviewUrl ? 0 : undefined}
                       onClick={sourcePreviewUrl ? handlePreviewSource : undefined}
@@ -319,6 +322,7 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns }: MultiV
                 setSelectedHistoryId(item.id);
                 setActiveTab("result");
               }}
+              onDeleteHistory={onDeleteHistory}
             />
           </div>
         </div>

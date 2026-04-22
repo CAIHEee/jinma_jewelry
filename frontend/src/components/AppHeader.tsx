@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 import type { CurrentUser } from "../types/auth";
 
 interface AppHeaderProps {
@@ -7,6 +9,23 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ title, currentUser, onLogout }: AppHeaderProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
+  const displayName = currentUser.display_name || currentUser.username;
+  const avatarText = displayName.trim().slice(0, 1).toUpperCase();
+
   return (
     <header className="topbar">
       <div>
@@ -14,13 +33,29 @@ export function AppHeader({ title, currentUser, onLogout }: AppHeaderProps) {
         <h1>{title}</h1>
       </div>
       <div className="topbar-actions">
-        <div className="status-pill online">后端已连接</div>
-        <div className="status-pill warning">OSS 已配置</div>
-        <div className="status-pill idle">{currentUser.role === "root" ? "ROOT" : "USER"}</div>
-        <div className="status-pill">{currentUser.display_name || currentUser.username}</div>
-        <button className="secondary-button compact-button" type="button" onClick={() => void onLogout()}>
-          退出登录
-        </button>
+        <div className="topbar-user-menu" ref={menuRef}>
+          <button className={menuOpen ? "topbar-user-trigger open" : "topbar-user-trigger"} type="button" onClick={() => setMenuOpen((value) => !value)}>
+            <span className="topbar-user-avatar" aria-hidden="true">
+              {avatarText}
+            </span>
+            <span className="topbar-user-name">{displayName}</span>
+          </button>
+
+          {menuOpen ? (
+            <div className="topbar-user-dropdown">
+              <button
+                className="topbar-user-dropdown-item"
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void onLogout();
+                }}
+              >
+                退出登录
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </header>
   );

@@ -91,7 +91,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
   return (
     <div className="page-stack compact-page split-page">
       <section className="panel compact-panel">
-        <div className="dashboard-grid result-heavy">
+        <div className="dashboard-grid result-heavy single-result-layout">
           <div className="form-card parameter-scroll-panel text-to-image-form compact-parameter-panel">
             <label className="input-group compact-input-group text-to-image-model-row">
               <span>模型</span>
@@ -150,26 +150,29 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
                   <span className="drawer-hint">展开 / 收起</span>
                 </summary>
                 <div className="drawer-content">
-                  {previewResultUrl ? (
-                    <div
-                      className="generated-result-card large-preview interactive-result-card"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setPreviewOpen(true)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setPreviewOpen(true);
-                        }
-                      }}
-                    >
-                      <img className="generated-image image-fit-contain interactive-preview-image" src={previewResultUrl} alt="生成结果" />
-                    </div>
-                  ) : (
-                    <div className="generated-result-card placeholder large-preview">
-                      <p>提交任务后，这里会显示返回图片。</p>
-                    </div>
-                  )}
+                  <div className="result-preview-pane result-preview-pane-single">
+                    <span>生成结果</span>
+                    {previewResultUrl ? (
+                      <div
+                        className="generated-result-card compare image-edit-result-card interactive-result-card"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setPreviewOpen(true)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setPreviewOpen(true);
+                          }
+                        }}
+                      >
+                        <img className="generated-image image-fit-contain interactive-preview-image" src={previewResultUrl} alt="生成结果" />
+                      </div>
+                    ) : (
+                      <div className="generated-result-card placeholder compare image-edit-result-card">
+                        <p>提交任务后，这里会显示返回图片。</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </details>
             </div>

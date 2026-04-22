@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import HTTPException, UploadFile, status
+from PIL import Image
 from starlette.datastructures import Headers
 
 from app.core.config import get_settings
@@ -328,6 +329,21 @@ class AIService:
         current_user: User,
         source_image_url: str | None = None,
     ) -> GenerationResult:
+        return await self.transform_reference_images(
+            files=[file] if file is not None else [],
+            metadata=metadata,
+            current_user=current_user,
+            source_image_urls=[source_image_url] if source_image_url else None,
+        )
+
+    async def transform_reference_images(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: ReferenceImageRequestMetadata,
+        current_user: User,
+        source_image_urls: list[str] | None = None,
+    ) -> GenerationResult:
         context_token = _request_user.set(current_user)
         model = self._get_model_or_404(metadata.model)
         try:
@@ -337,10 +353,10 @@ class AIService:
                     detail=f"Model {metadata.model} does not support reference-image transforms.",
                 )
 
-            submit_file = file
-            if file is not None:
+            submit_files = files
+            if files:
                 input_asset = await self.asset_service.create_input_asset(
-                    file=file,
+                    file=files[0],
                     module_kind=self._map_feature_to_history_kind(metadata.feature),
                     current_user=current_user,
                     metadata={
@@ -349,18 +365,71 @@ class AIService:
                         "filename": metadata.filename,
                     },
                 )
+                input_assets = [input_asset]
+                for file in files[1:]:
+                    input_assets.append(
+                        await self.asset_service.create_input_asset(
+                            file=file,
+                            module_kind=self._map_feature_to_history_kind(metadata.feature),
+                            current_user=current_user,
+                            metadata={
+                                "feature": metadata.feature,
+                                "model": metadata.model,
+                                "filename": file.filename or "reference.png",
+                            },
+                        )
+                    )
                 metadata = metadata.model_copy(
                     update={
-                        "source_image_url": input_asset.preview_url,
-                        "source_image_storage_url": input_asset.storage_url,
+                        "image_count": len(input_assets),
+                        "filename": input_assets[0].name,
+                        "filenames": [asset.name for asset in input_assets],
+                        "source_image_url": input_assets[0].preview_url,
+                        "source_image_storage_url": input_assets[0].storage_url,
+                        "source_images": [
+                            {
+                                "filename": asset.name,
+                                "source_image_url": asset.preview_url,
+                                "storage_url": asset.storage_url,
+                                "preview_url": asset.preview_url,
+                            }
+                            for asset in input_assets
+                        ],
                     }
                 )
-            elif source_image_url:
-                submit_file = await self._build_upload_file_from_url(source_image_url, metadata.filename)
+            elif source_image_urls:
+                normalized_urls = [url for url in source_image_urls if url]
+                if not normalized_urls:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Either file or source_image_url is required.",
+                    )
+                submit_files = [
+                    await self._build_upload_file_from_url(
+                        url,
+                        metadata.filenames[index] if index < len(metadata.filenames) else metadata.filename,
+                    )
+                    for index, url in enumerate(normalized_urls)
+                ]
+                filenames = [
+                    metadata.filenames[index] if index < len(metadata.filenames) else f"reference-{index + 1}.png"
+                    for index in range(len(normalized_urls))
+                ]
                 metadata = metadata.model_copy(
                     update={
-                        "source_image_url": source_image_url,
+                        "image_count": len(normalized_urls),
+                        "filename": filenames[0],
+                        "filenames": filenames,
+                        "source_image_url": normalized_urls[0],
                         "source_image_storage_url": None,
+                        "source_images": [
+                            {
+                                "filename": filenames[index],
+                                "source_image_url": url,
+                                "preview_url": url,
+                            }
+                            for index, url in enumerate(normalized_urls)
+                        ],
                     }
                 )
             else:
@@ -371,12 +440,12 @@ class AIService:
 
             if self._use_apiyi():
                 if model.provider == ProviderType.gemini:
-                    return await self._transform_with_gemini_apiyi(file=submit_file, metadata=metadata, model=model)
-                return await self._transform_with_flux_apiyi(file=submit_file, metadata=metadata, model=model)
+                    return await self._transform_with_gemini_apiyi(files=submit_files, metadata=metadata, model=model)
+                return await self._transform_with_flux_apiyi(files=submit_files, metadata=metadata, model=model)
 
             if model.provider == ProviderType.gemini:
-                return await self._transform_with_gemini(file=submit_file, metadata=metadata, model=model)
-            return await self._transform_with_flux(file=submit_file, metadata=metadata, model=model)
+                return await self._transform_with_gemini(files=submit_files, metadata=metadata, model=model)
+            return await self._transform_with_flux(files=submit_files, metadata=metadata, model=model)
         finally:
             _request_user.reset(context_token)
 
@@ -403,6 +472,7 @@ class AIService:
             split_assets = await self._split_and_store_multi_view_assets(
                 image_bytes=image_bytes,
                 source_image_url=payload.image_url,
+                source_image_name=payload.source_image_name,
                 model=payload.model,
                 split_x_ratio=payload.split_x_ratio,
                 split_y_ratio=payload.split_y_ratio,
@@ -432,6 +502,7 @@ class AIService:
                 storage_url=first_item["storage_url"] if first_item else None,
                 metadata={
                     "source_image_url": payload.image_url,
+                    "source_image_name": payload.source_image_name,
                     "split_x_ratio": payload.split_x_ratio,
                     "split_y_ratio": payload.split_y_ratio,
                     "gap_x_ratio": payload.gap_x_ratio,
@@ -440,6 +511,27 @@ class AIService:
                 },
             )
             return response
+        finally:
+            _request_user.reset(context_token)
+
+    async def remove_background_image(
+        self,
+        *,
+        file: UploadFile | None,
+        source_image_url: str | None,
+        current_user: User,
+    ) -> tuple[bytes, str]:
+        context_token = _request_user.set(current_user)
+        try:
+            if file is not None:
+                image_bytes = await file.read()
+                await file.seek(0)
+            elif source_image_url:
+                image_bytes, _ = await self._download_image(source_image_url)
+            else:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Either image or source_image_url is required.")
+
+            return await asyncio.to_thread(self._remove_background_to_white_png, image_bytes)
         finally:
             _request_user.reset(context_token)
 
@@ -756,6 +848,7 @@ class AIService:
             image_url=image_url,
             kind="fusion",
             model=model.id,
+            preferred_name=self._preferred_fusion_asset_name(metadata),
         )
         result = GenerationResult(
             job_id=None,
@@ -825,6 +918,7 @@ class AIService:
             content_type=content_type,
             kind="fusion",
             model=model.id,
+            preferred_name=self._preferred_fusion_asset_name(metadata),
         )
         result = GenerationResult(
             job_id=None,
@@ -858,18 +952,19 @@ class AIService:
     async def _transform_with_gemini(
         self,
         *,
-        file: UploadFile,
+        files: list[UploadFile],
         metadata: ReferenceImageRequestMetadata,
         model: TTAPIModelConfig,
     ) -> GenerationResult:
         api_key = self._require_api_key()
+        refer_images = [await self._file_to_data_url(file) for file in files]
         payload = {
             "model": model.id,
             "prompt": metadata.prompt,
             "aspect_ratio": "1:1",
             "image_size": metadata.image_size,
             "thinking_level": "Minimal",
-            "refer_images": [await self._file_to_data_url(file)],
+            "refer_images": refer_images,
         }
         data = await self._post_json(
             base_url=self.settings.ttapi_openai_base_url,
@@ -882,6 +977,7 @@ class AIService:
             image_url=image_url,
             kind=metadata.feature,
             model=model.id,
+            preferred_name=metadata.filename,
         )
         result = GenerationResult(
             job_id=None,
@@ -913,31 +1009,29 @@ class AIService:
     async def _transform_with_gemini_apiyi(
         self,
         *,
-        file: UploadFile,
+        files: list[UploadFile],
         metadata: ReferenceImageRequestMetadata,
         model: TTAPIModelConfig,
     ) -> GenerationResult:
         api_key = self._require_apiyi_api_key()
-        image_bytes = await file.read()
-        await file.seek(0)
+        parts: list[dict[str, Any]] = [{"text": metadata.prompt}]
+        for file in files:
+            image_bytes = await file.read()
+            await file.seek(0)
+            parts.append(
+                {
+                    "inlineData": {
+                        "mimeType": file.content_type or "image/png",
+                        "data": base64.b64encode(image_bytes).decode("utf-8"),
+                    }
+                }
+            )
         data = await self._post_json_with_bearer(
             base_url=self.settings.apiyi_gemini_base_url,
             path=f"/models/{model.id}:generateContent",
             api_key=api_key,
             payload={
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": metadata.prompt},
-                            {
-                                "inlineData": {
-                                    "mimeType": file.content_type or "image/png",
-                                    "data": base64.b64encode(image_bytes).decode("utf-8"),
-                                }
-                            },
-                        ]
-                    }
-                ],
+                "contents": [{"parts": parts}],
                 "generationConfig": {
                     "responseModalities": ["IMAGE"],
                     "imageConfig": {
@@ -953,6 +1047,7 @@ class AIService:
             content_type=content_type,
             kind=metadata.feature,
             model=model.id,
+            preferred_name=metadata.filename,
         )
         result = GenerationResult(
             job_id=None,
@@ -994,7 +1089,6 @@ class AIService:
             "prompt": self._build_fusion_prompt(metadata),
             "mode": model.id,
             "aspect_ratio": "1:1",
-            "image_size": metadata.image_size,
         }
         submit_data = await self._post_multipart(
             base_url=self.settings.ttapi_flux_base_url,
@@ -1019,6 +1113,7 @@ class AIService:
             image_url=image_url,
             kind="fusion",
             model=model.id,
+            preferred_name=self._preferred_fusion_asset_name(metadata),
         )
         result = GenerationResult(
             job_id=job_id,
@@ -1071,6 +1166,7 @@ class AIService:
             image_url=upstream_image_url,
             kind="fusion",
             model=model.id,
+            preferred_name=self._preferred_fusion_asset_name(metadata),
         )
         result = GenerationResult(
             job_id=self._extract_job_id(data),
@@ -1105,12 +1201,12 @@ class AIService:
     async def _transform_with_flux(
         self,
         *,
-        file: UploadFile,
+        files: list[UploadFile],
         metadata: ReferenceImageRequestMetadata,
         model: TTAPIModelConfig,
     ) -> GenerationResult:
         api_key = self._require_api_key()
-        multipart_files = [await self._build_multipart_file(file)]
+        multipart_files = [await self._build_multipart_file(file) for file in files]
         form_data = {
             "prompt": metadata.prompt,
             "mode": model.id,
@@ -1140,6 +1236,7 @@ class AIService:
             image_url=image_url,
             kind=metadata.feature,
             model=model.id,
+            preferred_name=metadata.filename,
         )
         result = GenerationResult(
             job_id=job_id,
@@ -1171,12 +1268,12 @@ class AIService:
     async def _transform_with_flux_apiyi(
         self,
         *,
-        file: UploadFile,
+        files: list[UploadFile],
         metadata: ReferenceImageRequestMetadata,
         model: TTAPIModelConfig,
     ) -> GenerationResult:
         api_key = self._require_apiyi_api_key()
-        multipart_files = [await self._build_multipart_file(file)]
+        multipart_files = [await self._build_multipart_file(file) for file in files]
         data = await self._post_multipart_with_bearer(
             base_url=self.settings.apiyi_openai_base_url,
             path="/images/edits",
@@ -1193,6 +1290,7 @@ class AIService:
             image_url=upstream_image_url,
             kind=metadata.feature,
             model=model.id,
+            preferred_name=metadata.filename,
         )
         result = GenerationResult(
             job_id=self._extract_job_id(data),
@@ -1553,10 +1651,31 @@ class AIService:
         }
         return label_map.get(kind, "生成结果")
 
-    def _generated_asset_name(self, *, kind: str, content_type: str) -> str:
+    def _generated_asset_name(
+        self,
+        *,
+        kind: str,
+        content_type: str,
+        preferred_name: str | None = None,
+        name_suffix: str | None = None,
+    ) -> str:
         extension = self._extension_from_content_type(content_type)
+        if preferred_name:
+            source_name = Path(preferred_name).name.strip()
+            source_stem = Path(source_name).stem.strip()
+            if source_stem:
+                sanitized_stem = source_stem.replace("/", "_").replace("\\", "_")
+                if name_suffix:
+                    sanitized_suffix = name_suffix.replace("/", "_").replace("\\", "_")
+                    return f"{sanitized_stem}_{sanitized_suffix}{extension}"
+                return f"{sanitized_stem}{extension}"
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"{self._module_display_name(kind)}_{timestamp}{extension}"
+
+    def _stored_filename_from_object_key(self, object_key: str, fallback_name: str) -> str:
+        filename = Path(object_key).name.strip()
+        return filename or fallback_name
 
     def _extension_from_content_type(self, content_type: str) -> str:
         mapping = {
@@ -1570,7 +1689,9 @@ class AIService:
     def _build_reference_history_metadata(self, metadata: ReferenceImageRequestMetadata) -> dict[str, object]:
         payload: dict[str, object] = {
             "feature": metadata.feature,
+            "image_count": metadata.image_count,
             "source_filename": metadata.filename,
+            "filenames": metadata.filenames or [metadata.filename],
             "strength": metadata.strength,
             "negative_prompt": metadata.negative_prompt,
         }
@@ -1578,6 +1699,8 @@ class AIService:
             payload["source_image_url"] = metadata.source_image_url
         if metadata.source_image_storage_url:
             payload["source_image_storage_url"] = metadata.source_image_storage_url
+        if metadata.source_images:
+            payload["source_images"] = self._serialize_input_image_sources(metadata.source_images)
         return payload
 
     def _build_reference_result_update(self, metadata: ReferenceImageRequestMetadata) -> dict[str, str]:
@@ -1594,8 +1717,24 @@ class AIService:
             "image_count": metadata.image_count,
             "primary_image_index": metadata.primary_image_index,
             "filenames": metadata.filenames,
-            "source_images": [item.model_dump() for item in metadata.source_images],
+            "source_images": self._serialize_input_image_sources(metadata.source_images),
         }
+
+    def _serialize_input_image_sources(self, items: list[object]) -> list[dict[str, object]]:
+        serialized: list[dict[str, object]] = []
+        for item in items:
+            if hasattr(item, "model_dump"):
+                serialized.append(item.model_dump())
+            elif isinstance(item, dict):
+                serialized.append(dict(item))
+        return serialized
+
+    def _preferred_fusion_asset_name(self, metadata: FusionRequestMetadata) -> str | None:
+        if not metadata.filenames:
+            return None
+        if 0 <= metadata.primary_image_index < len(metadata.filenames):
+            return metadata.filenames[metadata.primary_image_index]
+        return metadata.filenames[0]
 
     def _build_asset_content_url(self, storage_url: str, filename: str | None = None) -> str:
         query: dict[str, str] = {"storage_url": storage_url}
@@ -1609,6 +1748,8 @@ class AIService:
         image_url: str | None,
         kind: str,
         model: str,
+        preferred_name: str | None = None,
+        name_suffix: str | None = None,
     ) -> dict[str, Any]:
         if not image_url:
             return {"storage_url": None, "access_url": None, "metadata": {}}
@@ -1617,7 +1758,13 @@ class AIService:
         if not self.storage_service.is_configured():
             image_bytes, content_type = await self._download_image(image_url)
             object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
-            asset_name = self._generated_asset_name(kind=kind, content_type=content_type)
+            fallback_name = self._generated_asset_name(
+                kind=kind,
+                content_type=content_type,
+                preferred_name=preferred_name,
+                name_suffix=name_suffix,
+            )
+            asset_name = self._stored_filename_from_object_key(object_key, fallback_name)
             storage_url = self._store_local_generated_asset(
                 object_key=object_key,
                 image_bytes=image_bytes,
@@ -1648,7 +1795,13 @@ class AIService:
 
         image_bytes, content_type = await self._download_image(image_url)
         object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
-        asset_name = self._generated_asset_name(kind=kind, content_type=content_type)
+        fallback_name = self._generated_asset_name(
+            kind=kind,
+            content_type=content_type,
+            preferred_name=preferred_name,
+            name_suffix=name_suffix,
+        )
+        asset_name = self._stored_filename_from_object_key(object_key, fallback_name)
         stored = self.storage_service.upload_bytes(
             object_key=object_key,
             content=image_bytes,
@@ -1685,11 +1838,19 @@ class AIService:
         content_type: str,
         kind: str,
         model: str,
+        preferred_name: str | None = None,
+        name_suffix: str | None = None,
     ) -> dict[str, Any]:
         request_user = self._require_request_user()
-        asset_name = self._generated_asset_name(kind=kind, content_type=content_type)
+        fallback_name = self._generated_asset_name(
+            kind=kind,
+            content_type=content_type,
+            preferred_name=preferred_name,
+            name_suffix=name_suffix,
+        )
         if not self.storage_service.is_configured():
             object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
+            asset_name = self._stored_filename_from_object_key(object_key, fallback_name)
             storage_url = self._store_local_generated_asset(
                 object_key=object_key,
                 image_bytes=image_bytes,
@@ -1717,6 +1878,7 @@ class AIService:
             }
 
         object_key = self._build_object_key(kind=kind, model=model, content_type=content_type)
+        asset_name = self._stored_filename_from_object_key(object_key, fallback_name)
         stored = self.storage_service.upload_bytes(
             object_key=object_key,
             content=image_bytes,
@@ -1749,6 +1911,7 @@ class AIService:
         *,
         image_bytes: bytes,
         source_image_url: str,
+        source_image_name: str | None,
         model: str,
         split_x_ratio: float,
         split_y_ratio: float,
@@ -1770,6 +1933,8 @@ class AIService:
                 content_type="image/png",
                 kind=f"multi_view/{item['view']}",
                 model=model,
+                preferred_name=source_image_name,
+                name_suffix=item["view"],
             )
             stored_items.append(
                 {
@@ -1880,6 +2045,31 @@ class AIService:
             )
 
         return results
+
+    def _remove_background_to_white_png(self, image_bytes: bytes) -> tuple[bytes, str]:
+        try:
+            from rembg import remove
+        except ImportError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="rembg is not installed on the server.",
+            ) from exc
+
+        try:
+            transparent_bytes = remove(image_bytes)
+            with Image.open(BytesIO(transparent_bytes)).convert("RGBA") as foreground:
+                white_background = Image.new("RGBA", foreground.size, (255, 255, 255, 255))
+                white_background.alpha_composite(foreground)
+                output_buffer = BytesIO()
+                white_background.convert("RGB").save(output_buffer, format="PNG")
+                return output_buffer.getvalue(), "image/png"
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Background removal failed: {exc}",
+            ) from exc
 
     def _build_object_key(self, *, kind: str, model: str, content_type: str) -> str:
         now = datetime.utcnow()

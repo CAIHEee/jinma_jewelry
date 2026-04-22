@@ -8,6 +8,7 @@ MODULE_KEYS = [
     "multi_view",
     "multi_view_split",
     "grayscale_relief",
+    "remove_background",
     "asset_management",
     "history",
 ]
@@ -22,6 +23,7 @@ MODULE_LABELS = {
     "multi_view": "生成多视图",
     "multi_view_split": "多视图切图",
     "grayscale_relief": "转灰度图",
+    "remove_background": "去除背景",
     "asset_management": "资产管理",
     "history": "历史记录",
 }

@@ -88,6 +88,10 @@ const SPLIT_TITLE_KEYWORD = "\u591a\u89c6\u56fe\u5207\u56fe";
 
 export function normalizeHistoryKind(kind: string): NormalizedHistoryKind | null {
   const normalized = kind.trim().toLowerCase();
+  if (normalized.startsWith("multi_view/")) {
+    return "multi_view_split";
+  }
+
   const aliasMap: Record<string, NormalizedHistoryKind> = {
     text_to_image: "text_to_image",
     fusion: "fusion",

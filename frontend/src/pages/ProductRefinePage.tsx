@@ -30,7 +30,8 @@ export function ProductRefinePage(props: ProductRefinePageProps) {
       module="product-refine"
       historyKind="product_refine"
       endpointPath="/ai/product-refine"
-      defaultPrompt="在保持当前珠宝产品结构与镶嵌关系不变的前提下，精修整体光感、金属细节、边缘干净度与商业展示质感，使其更适合品牌展示与电商主图使用。"
+      allowMultipleSources
+      defaultPrompt=""
     />
   );
 }

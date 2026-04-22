@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Response
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.models.user import User
-from app.schemas.auth import CurrentUserResponse, LoginRequest, LoginResponse
+from app.schemas.auth import CurrentUserResponse, LoginRequest, LoginResponse, RegisterRequest
 from app.services.auth_service import AuthService
 
 
@@ -15,6 +15,19 @@ settings = get_settings()
 @router.post("/auth/login", response_model=LoginResponse)
 def login(payload: LoginRequest, response: Response) -> LoginResponse:
     result = service.login(payload.username, payload.password)
+    response.set_cookie(
+        key=settings.auth_cookie_name,
+        value=result.access_token,
+        httponly=True,
+        samesite="lax",
+        max_age=settings.auth_token_expire_hours * 3600,
+    )
+    return result
+
+
+@router.post("/auth/register", response_model=LoginResponse)
+def register(payload: RegisterRequest, response: Response) -> LoginResponse:
+    result = service.register(payload)
     response.set_cookie(
         key=settings.auth_cookie_name,
         value=result.access_token,

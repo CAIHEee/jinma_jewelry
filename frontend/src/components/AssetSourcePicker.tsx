@@ -27,6 +27,7 @@ export function AssetSourcePicker({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [assetModalOpen, setAssetModalOpen] = useState(false);
+  const [assetScope, setAssetScope] = useState<"mine" | "community">("mine");
   const uploadFilesChangeRef = useRef(onUploadFilesChange);
   const selectedAssetsChangeRef = useRef(onSelectedAssetsChange);
 
@@ -39,6 +40,15 @@ export function AssetSourcePicker({
   }, [onSelectedAssetsChange]);
 
   const selectedAssets = useMemo(() => assetItems.filter((item) => selectedIds.includes(item.id)), [assetItems, selectedIds]);
+  const personalAssetItems = useMemo(
+    () => assetItems.filter((item) => item.scope !== "community" || item.source === "我的资产" || item.source === "当前会话"),
+    [assetItems],
+  );
+  const communityAssetItems = useMemo(
+    () => assetItems.filter((item) => item.scope === "community" || item.source === "社区资产"),
+    [assetItems],
+  );
+  const visibleAssetItems = assetScope === "mine" ? personalAssetItems : communityAssetItems;
 
   const uploadedPreviews = useMemo(
     () =>
@@ -274,12 +284,31 @@ export function AssetSourcePicker({
             </div>
 
             <div className="asset-modal-toolbar">
+              <div className="asset-modal-scope-nav" role="tablist" aria-label="资产范围选择">
+                <button
+                  className={assetScope === "mine" ? "asset-modal-scope-button active" : "asset-modal-scope-button"}
+                  type="button"
+                  onClick={() => setAssetScope("mine")}
+                >
+                  个人资产
+                  <span>{personalAssetItems.length}</span>
+                </button>
+                <button
+                  className={assetScope === "community" ? "asset-modal-scope-button active" : "asset-modal-scope-button"}
+                  type="button"
+                  onClick={() => setAssetScope("community")}
+                >
+                  社区资产
+                  <span>{communityAssetItems.length}</span>
+                </button>
+              </div>
               <div className="hint-box template-hint-box">{allowMultiple ? "当前支持多选" : "当前支持单选"}</div>
             </div>
 
             <div className="asset-modal-body">
-              <div className="asset-grid asset-library-grid">
-                {assetItems.map((item) => {
+              {visibleAssetItems.length > 0 ? (
+                <div className="asset-grid asset-library-grid">
+                  {visibleAssetItems.map((item) => {
                   const selected = selectedIds.includes(item.id);
                   const assetPreviewUrl = item.previewUrl ?? item.storageUrl ?? null;
                   return (
@@ -300,8 +329,13 @@ export function AssetSourcePicker({
                       </div>
                     </button>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+              ) : (
+                <div className="panel-subcard empty-state asset-modal-empty-state">
+                  <p className="muted">{assetScope === "mine" ? "当前没有可选的个人资产。" : "当前没有可选的社区资产。"}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

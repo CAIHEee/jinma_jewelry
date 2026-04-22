@@ -1,4 +1,4 @@
-import type { AdminUser, AdminUserListResponse } from "../types/admin";
+import type { AdminSystemStatus, AdminUser, AdminUserListResponse } from "../types/admin";
 import type { CurrentUser, LoginResponse, ModulePermissionItem } from "../types/auth";
 import type {
   FusionRequest,
@@ -63,6 +63,20 @@ export async function login(username: string, password: string): Promise<LoginRe
   return handleJsonResponse<LoginResponse>(response);
 }
 
+export async function registerUser(payload: {
+  username: string;
+  password: string;
+  display_name?: string;
+  email?: string;
+}): Promise<LoginResponse> {
+  const response = await apiFetch(buildApiUrl("/auth/register"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return handleJsonResponse<LoginResponse>(response);
+}
+
 export async function logout(): Promise<void> {
   const response = await apiFetch(buildApiUrl("/auth/logout"), { method: "POST" });
   if (!response.ok) {
@@ -118,7 +132,14 @@ export async function submitReferenceImageTransform(payload: ReferenceImageTrans
 
 export async function submitReferenceModuleTransform(path: string, payload: ReferenceImageTransformRequest): Promise<GenerationResult> {
   const formData = new FormData();
+  payload.files?.forEach((file) => formData.append("images", file));
   if (payload.file) formData.append("image", payload.file);
+  if (payload.sourceImageUrls?.length) {
+    formData.append("source_image_urls_json", JSON.stringify(payload.sourceImageUrls));
+  }
+  if (payload.sourceImageNames?.length) {
+    formData.append("source_image_names_json", JSON.stringify(payload.sourceImageNames));
+  }
   if (payload.sourceImageUrl) formData.append("source_image_url", payload.sourceImageUrl);
   if (payload.sourceImageName) formData.append("source_image_name", payload.sourceImageName);
   formData.append("model", payload.model);
@@ -159,6 +180,22 @@ export async function splitMultiViewImage(payload: MultiViewSplitRequest): Promi
     body: JSON.stringify(payload),
   });
   return handleJsonResponse<MultiViewSplitResponse>(response);
+}
+
+export async function submitRemoveBackground(payload: { file?: File | null; sourceImageUrl?: string | null }): Promise<Blob> {
+  const formData = new FormData();
+  if (payload.file) formData.append("image", payload.file);
+  if (payload.sourceImageUrl) formData.append("source_image_url", payload.sourceImageUrl);
+
+  const response = await apiFetch(buildApiUrl("/ai/remove-background"), {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Remove background failed");
+  }
+  return response.blob();
 }
 
 export async function fetchPersistedHistory(includeAll = false): Promise<PersistedHistoryResponse> {
@@ -225,6 +262,11 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
   return body.items;
 }
 
+export async function fetchAdminSystemStatus(): Promise<AdminSystemStatus> {
+  const response = await apiFetch(buildApiUrl("/admin/system-status"), { cache: "no-store" });
+  return handleJsonResponse<AdminSystemStatus>(response);
+}
+
 export async function createAdminUser(payload: {
   username: string;
   display_name?: string;
@@ -273,6 +315,14 @@ export async function updateAdminUserPermissions(userId: string, items: ModulePe
     }),
   });
   return handleJsonResponse<ModulePermissionItem[]>(response);
+}
+
+export async function deleteAdminUser(userId: string): Promise<void> {
+  const response = await apiFetch(buildApiUrl(`/admin/users/${userId}`), { method: "DELETE" });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Delete user failed");
+  }
 }
 
 export async function assetItemToFile(asset: AssetItem): Promise<File> {

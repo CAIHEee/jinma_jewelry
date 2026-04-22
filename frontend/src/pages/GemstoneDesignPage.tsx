@@ -30,7 +30,8 @@ export function GemstoneDesignPage(props: GemstoneDesignPageProps) {
       module="gemstone-design"
       historyKind="gemstone_design"
       endpointPath="/ai/gemstone-design"
-      defaultPrompt="基于参考图设计更完整的裸石展示方案，强化宝石轮廓、切面逻辑、通透感、火彩与展示效果，输出适合珠宝选石与方案确认的高质量裸石图。"
+      allowMultipleSources
+      defaultPrompt=""
     />
   );
 }

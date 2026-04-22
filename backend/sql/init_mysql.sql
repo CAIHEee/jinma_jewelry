@@ -11,11 +11,13 @@ CREATE TABLE IF NOT EXISTS `users` (
   `email` VARCHAR(255) DEFAULT NULL,
   `password_hash` TEXT DEFAULT NULL,
   `is_disabled` TINYINT NOT NULL DEFAULT 0 COMMENT '0=enabled,1=disabled',
+  `deleted_at` DATETIME(6) DEFAULT NULL,
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_users_username` (`username`),
-  UNIQUE KEY `uk_users_email` (`email`)
+  UNIQUE KEY `uk_users_email` (`email`),
+  KEY `ix_users_deleted_at` (`deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `generation_records` (

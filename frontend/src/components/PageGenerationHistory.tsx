@@ -88,7 +88,7 @@ export function PageGenerationHistory({ title, items, activeId, onPreview, onDel
                   ) : null}
                 </button>
 
-                {!collapsed && item.source === "persisted" && item.persistedId ? (
+                {!collapsed && onDeleteHistory && item.source === "persisted" && item.persistedId ? (
                   <div className="page-history-card-actions">
                     <button
                       className="secondary-button compact-button"

@@ -35,11 +35,13 @@ CREATE TABLE `users` (
   `email` varchar(255) DEFAULT NULL,
   `password_hash` text DEFAULT NULL,
   `is_disabled` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0=enabled,1=disabled',
+  `deleted_at` datetime(6) DEFAULT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_users_username` (`username`),
   UNIQUE KEY `uk_users_email` (`email`),
+  KEY `ix_users_deleted_at` (`deleted_at`),
   KEY `ix_users_role` (`role`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -148,6 +150,7 @@ VALUES
   ('root-mview', '00000000-0000-0000-0000-000000000001', 'multi_view', 1),
   ('root-msplit', '00000000-0000-0000-0000-000000000001', 'multi_view_split', 1),
   ('root-gray', '00000000-0000-0000-0000-000000000001', 'grayscale_relief', 1),
+  ('root-rmbg', '00000000-0000-0000-0000-000000000001', 'remove_background', 1),
   ('root-asset', '00000000-0000-0000-0000-000000000001', 'asset_management', 1),
   ('root-history', '00000000-0000-0000-0000-000000000001', 'history', 1);
 
@@ -442,6 +445,8 @@ INSERT INTO `generation_records` (
   );
 
 INSERT INTO `schema_migrations` (`version`, `applied_at`)
-VALUES ('20260420_auth_assets', CURRENT_TIMESTAMP(6));
+VALUES
+  ('20260420_auth_assets', CURRENT_TIMESTAMP(6)),
+  ('20260422_user_soft_delete', CURRENT_TIMESTAMP(6));
 
 SET FOREIGN_KEY_CHECKS = 1;

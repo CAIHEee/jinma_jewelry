@@ -19,15 +19,20 @@ def run_migrations(engine: Engine) -> None:
             row[0] for row in connection.execute(text("SELECT version FROM schema_migrations"))
         }
 
-    if "20260420_auth_assets" in applied_versions:
-        return
+    migrations = [
+        ("20260420_auth_assets", _apply_auth_assets_migration),
+        ("20260422_user_soft_delete", _apply_user_soft_delete_migration),
+    ]
 
-    _apply_auth_assets_migration(engine)
-    with engine.begin() as connection:
-        connection.execute(
-            text("INSERT INTO schema_migrations (version, applied_at) VALUES (:version, :applied_at)"),
-            {"version": "20260420_auth_assets", "applied_at": datetime.now(timezone.utc)},
-        )
+    for version, migration in migrations:
+        if version in applied_versions:
+            continue
+        migration(engine)
+        with engine.begin() as connection:
+            connection.execute(
+                text("INSERT INTO schema_migrations (version, applied_at) VALUES (:version, :applied_at)"),
+                {"version": version, "applied_at": datetime.now(timezone.utc)},
+            )
 
 
 def _ensure_schema_migrations_table(engine: Engine) -> None:
@@ -212,3 +217,8 @@ def _apply_auth_assets_migration(engine: Engine) -> None:
                         "updated_at": now,
                     },
                 )
+
+
+def _apply_user_soft_delete_migration(engine: Engine) -> None:
+    _add_column_if_missing(engine, "users", "deleted_at", "DATETIME")
+    _create_index_if_missing(engine, "users", "ix_users_deleted_at", "deleted_at")

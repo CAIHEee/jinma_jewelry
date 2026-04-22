@@ -49,6 +49,13 @@ class TextToImageRequest(BaseModel):
     thinking_level: str = "Minimal"
 
 
+class InputImageSource(BaseModel):
+    filename: str
+    source_image_url: str | None = None
+    storage_url: str | None = None
+    preview_url: str | None = None
+
+
 class ReferenceImageRequestMetadata(BaseModel):
     model: str
     prompt: str = Field(min_length=1)
@@ -56,16 +63,12 @@ class ReferenceImageRequestMetadata(BaseModel):
     feature: str = "image_edit"
     strength: float = Field(default=0.75, ge=0.0, le=1.0)
     image_size: str = "1K"
+    image_count: int = Field(default=1, ge=1)
     filename: str
+    filenames: list[str] = Field(default_factory=list)
     source_image_url: str | None = None
     source_image_storage_url: str | None = None
-
-
-class InputImageSource(BaseModel):
-    filename: str
-    source_image_url: str | None = None
-    storage_url: str | None = None
-    preview_url: str | None = None
+    source_images: list[InputImageSource] = Field(default_factory=list)
 
 
 class FusionRequestMetadata(BaseModel):
@@ -95,6 +98,7 @@ class GenerationResult(BaseModel):
 
 class MultiViewSplitRequest(BaseModel):
     image_url: str = Field(min_length=1)
+    source_image_name: str | None = None
     model: str = Field(default="multi_view_split")
     split_x_ratio: float = Field(default=0.5, gt=0.05, lt=0.95)
     split_y_ratio: float = Field(default=0.5, gt=0.05, lt=0.95)

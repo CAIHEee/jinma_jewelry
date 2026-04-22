@@ -31,6 +31,8 @@ export function UpscaleEnhancePage(props: UpscaleEnhancePageProps) {
       historyKind="upscale"
       endpointPath="/ai/upscale"
       imageSize="2K"
+      hideModelSelector
+      hidePromptEditor
       defaultPrompt="在保持原始设计与构图不变的前提下，对图片进行高清放大与细节增强，提升边缘锐度、材质纹理、宝石细节和整体清晰度，使其更适合高清展示与细节审看。"
     />
   );

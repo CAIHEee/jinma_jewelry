@@ -13,13 +13,16 @@ import { LoginPage } from "./pages/LoginPage";
 import { MultiViewPage } from "./pages/MultiViewPage";
 import { MultiViewSplitPage } from "./pages/MultiViewSplitPage";
 import { ProductRefinePage } from "./pages/ProductRefinePage";
+import { RemoveBackgroundPage } from "./pages/RemoveBackgroundPage";
 import { TextToImagePage } from "./pages/TextToImagePage";
 import { UpscaleEnhancePage } from "./pages/UpscaleEnhancePage";
 import {
   buildAssetContentUrl,
   createAdminUser,
+  deleteAdminUser,
   deletePersistedAsset,
   deletePersistedHistory,
+  fetchAdminSystemStatus,
   fetchAdminUsers,
   fetchCurrentUser,
   fetchPersistedAssets,
@@ -28,12 +31,13 @@ import {
   logout,
   publishPersistedAsset,
   resetAdminUserPassword,
+  registerUser,
   unpublishPersistedAsset,
   updateAdminUser,
   updateAdminUserPermissions,
   uploadInputAsset,
 } from "./services/api";
-import type { AdminUser } from "./types/admin";
+import type { AdminSystemStatus, AdminUser } from "./types/admin";
 import type { CurrentUser } from "./types/auth";
 import type { PersistedAssetItem } from "./types/assets";
 import type { PersistedHistoryItem } from "./types/history";
@@ -59,10 +63,11 @@ export type AppView =
   | "fusion"
   | "history"
   | "grayscale-relief"
+  | "remove-background"
   | "asset-management"
   | "admin";
 
-const WORKSPACE_RUNS_STORAGE_KEY = "flux_workspace_runs_v1";
+const WORKSPACE_RUNS_STORAGE_KEY_PREFIX = "flux_workspace_runs_v1";
 const MAX_STORED_WORKSPACE_RUNS = 60;
 
 const viewModuleMap: Record<AppView, string | null> = {
@@ -76,6 +81,7 @@ const viewModuleMap: Record<AppView, string | null> = {
   fusion: "multi_image_fusion",
   history: "history",
   "grayscale-relief": "grayscale_relief",
+  "remove-background": "remove_background",
   "asset-management": "asset_management",
   admin: null,
 };
@@ -90,8 +96,8 @@ function buildPreviewBackground(url: string | null | undefined) {
   return `center / cover no-repeat url("${url}")`;
 }
 
-function isMultiViewSplitAsset(item: PersistedAssetItem) {
-  return normalizeHistoryKind(item.module_kind ?? "") === "multi_view_split";
+function isMultiViewSplitKind(kind: string | null | undefined) {
+  return normalizeHistoryKind(kind ?? "") === "multi_view_split";
 }
 
 function parseDisplayTimestamp(value: string): number {
@@ -123,6 +129,15 @@ function normalizeComparableUrl(value: string | null | undefined): string {
   } catch {
     return value.split("?")[0]?.split("#")[0] ?? value;
   }
+}
+
+function extractStoredFilename(storageUrl: string | null | undefined): string | null {
+  if (!storageUrl) return null;
+  const normalized = storageUrl.startsWith("oss://") || storageUrl.startsWith("local://") ? storageUrl.split("://")[1] ?? storageUrl : storageUrl;
+  const pathname = normalized.split("?")[0]?.split("#")[0] ?? normalized;
+  const parts = pathname.split("/").filter(Boolean);
+  const filename = parts.length ? parts[parts.length - 1].trim() : "";
+  return filename || null;
 }
 
 function containsChinese(value: string): boolean {
@@ -202,10 +217,15 @@ function dedupeAssetItems(items: AssetItem[]) {
   return Array.from(deduped.values());
 }
 
-function loadStoredWorkspaceRuns(): WorkspaceRun[] {
+function workspaceRunsStorageKey(userId: string) {
+  return `${WORKSPACE_RUNS_STORAGE_KEY_PREFIX}:${userId}`;
+}
+
+function loadStoredWorkspaceRuns(userId: string | null | undefined): WorkspaceRun[] {
   if (typeof window === "undefined") return [];
+  if (!userId) return [];
   try {
-    const raw = window.localStorage.getItem(WORKSPACE_RUNS_STORAGE_KEY);
+    const raw = window.localStorage.getItem(workspaceRunsStorageKey(userId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -225,10 +245,11 @@ function loadStoredWorkspaceRuns(): WorkspaceRun[] {
   }
 }
 
-function persistWorkspaceRuns(runs: WorkspaceRun[]) {
+function persistWorkspaceRuns(userId: string | null | undefined, runs: WorkspaceRun[]) {
   if (typeof window === "undefined") return;
+  if (!userId) return;
   try {
-    window.localStorage.setItem(WORKSPACE_RUNS_STORAGE_KEY, JSON.stringify(runs.slice(0, MAX_STORED_WORKSPACE_RUNS)));
+    window.localStorage.setItem(workspaceRunsStorageKey(userId), JSON.stringify(runs.slice(0, MAX_STORED_WORKSPACE_RUNS)));
   } catch {
     // Ignore storage write failures.
   }
@@ -253,6 +274,7 @@ function firstAvailableView(user: CurrentUser): AppView {
     "upscale",
     "multi-view",
     "grayscale-relief",
+    "remove-background",
     "multi-view-split",
     "history",
     "admin",
@@ -263,7 +285,7 @@ function firstAvailableView(user: CurrentUser): AppView {
 export default function App() {
   const [activeView, setActiveView] = useState<AppView>("text-to-image");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [workspaceRuns, setWorkspaceRuns] = useState<WorkspaceRun[]>(() => loadStoredWorkspaceRuns());
+  const [workspaceRuns, setWorkspaceRuns] = useState<WorkspaceRun[]>([]);
   const [persistedItems, setPersistedItems] = useState<PersistedHistoryItem[]>([]);
   const [persistedAssets, setPersistedAssets] = useState<PersistedAssetItem[]>([]);
   const [persistedError, setPersistedError] = useState<string | null>(null);
@@ -272,6 +294,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [adminSystemStatus, setAdminSystemStatus] = useState<AdminSystemStatus | null>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
   const [adminLoading, setAdminLoading] = useState(false);
 
@@ -280,8 +303,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    persistWorkspaceRuns(workspaceRuns);
-  }, [workspaceRuns]);
+    if (!currentUser) {
+      setWorkspaceRuns([]);
+      return;
+    }
+    setWorkspaceRuns(loadStoredWorkspaceRuns(currentUser.id));
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    persistWorkspaceRuns(currentUser?.id, workspaceRuns);
+  }, [currentUser?.id, workspaceRuns]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -296,7 +327,7 @@ export default function App() {
       const user = await fetchCurrentUser();
       setCurrentUser(user);
       setActiveView(firstAvailableView(user));
-      await Promise.all([refreshPersistedHistory(user), refreshPersistedAssets(), user.role === "root" ? refreshAdminUsers(user) : Promise.resolve()]);
+      await Promise.all([refreshPersistedHistory(user), refreshPersistedAssets(), user.role === "root" ? refreshAdminData(user) : Promise.resolve()]);
       setAuthError(null);
     } catch {
       setCurrentUser(null);
@@ -310,19 +341,37 @@ export default function App() {
       const response = await login(username, password);
       setCurrentUser(response.user);
       setActiveView(firstAvailableView(response.user));
-      await Promise.all([refreshPersistedHistory(response.user), refreshPersistedAssets(), response.user.role === "root" ? refreshAdminUsers(response.user) : Promise.resolve()]);
+      await Promise.all([refreshPersistedHistory(response.user), refreshPersistedAssets(), response.user.role === "root" ? refreshAdminData(response.user) : Promise.resolve()]);
       setAuthError(null);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "登录失败");
     }
   }
 
+  async function handleRegister(payload: { username: string; password: string; displayName?: string }) {
+    try {
+      const response = await registerUser({
+        username: payload.username,
+        password: payload.password,
+        display_name: payload.displayName,
+      });
+      setCurrentUser(response.user);
+      setActiveView(firstAvailableView(response.user));
+      await Promise.all([refreshPersistedHistory(response.user), refreshPersistedAssets()]);
+      setAuthError(null);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "注册失败");
+    }
+  }
+
   async function handleLogout() {
     await logout();
     setCurrentUser(null);
+    setWorkspaceRuns([]);
     setPersistedItems([]);
     setPersistedAssets([]);
     setAdminUsers([]);
+    setAdminSystemStatus(null);
   }
 
   async function refreshPersistedHistory(user = currentUser) {
@@ -339,7 +388,7 @@ export default function App() {
   async function refreshPersistedAssets() {
     try {
       const response = await fetchPersistedAssets("library");
-      setPersistedAssets(response.items.filter((item) => !isMultiViewSplitAsset(item)));
+      setPersistedAssets(response.items);
       setAssetError(null);
     } catch (error) {
       setAssetError(error instanceof Error ? error.message : "加载资产失败");
@@ -354,6 +403,21 @@ export default function App() {
       setAdminError(null);
     } catch (error) {
       setAdminError(error instanceof Error ? error.message : "加载用户失败");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
+  async function refreshAdminData(user = currentUser) {
+    if (user?.role !== "root") return;
+    try {
+      setAdminLoading(true);
+      const [users, status] = await Promise.all([fetchAdminUsers(), fetchAdminSystemStatus()]);
+      setAdminUsers(users);
+      setAdminSystemStatus(status);
+      setAdminError(null);
+    } catch (error) {
+      setAdminError(error instanceof Error ? error.message : "加载系统管理数据失败");
     } finally {
       setAdminLoading(false);
     }
@@ -394,9 +458,10 @@ export default function App() {
     const uploadedAssets = persistedAssets.map((item) => {
       const moduleLabel = item.module_kind ? mapKindToAssetCategory(item.module_kind) : "已上传资产";
       const previewUrl = item.preview_url ?? item.storage_url;
+      const resolvedName = extractStoredFilename(item.storage_url) ?? item.name;
       return {
         id: `asset-${item.id}`,
-        name: item.name,
+        name: resolvedName,
         category: moduleLabel,
         source: item.visibility === "community" ? "社区资产" : "我的资产",
         updatedAt: formatHistoryTimestamp(item.created_at),
@@ -415,30 +480,8 @@ export default function App() {
       } satisfies AssetItem;
     });
 
-    const persistedHistoryAssets = persistedItems
-      .filter((item) => item.preview_url || item.storage_url || item.image_url)
-      .map((item) => {
-        const previewUrl = item.preview_url ?? item.storage_url ?? item.image_url;
-        return {
-          id: `persisted-${item.id}`,
-          name: item.title,
-          category: mapKindToAssetCategory(item.kind),
-          source: "历史记录",
-          updatedAt: formatHistoryTimestamp(item.created_at),
-          sortAt: item.created_at,
-          preview: buildPreviewBackground(previewUrl),
-          tags: [mapKindToAssetCategory(item.kind), item.model, item.provider, item.owner_username ?? "unknown"],
-          storageUrl: item.storage_url ?? undefined,
-          previewUrl,
-          fileUrl: item.storage_url ? buildAssetContentUrl(item.storage_url, item.title) : undefined,
-          persistedHistoryId: item.id,
-          deletable: item.can_delete,
-          scope: "history",
-          ownerUsername: item.owner_username,
-        } satisfies AssetItem;
-      });
-
     const sessionAssets = workspaceRuns
+      .filter((item) => !isMultiViewSplitKind(item.kind))
       .filter((item) => item.imageUrl && !isBlobUrl(item.imageUrl))
       .map((item) => ({
         id: `session-${item.id}`,
@@ -454,11 +497,11 @@ export default function App() {
         scope: "session",
       } satisfies AssetItem));
 
-    const merged = dedupeAssetItems([...uploadedAssets, ...sessionAssets, ...persistedHistoryAssets]).sort(
+    const merged = dedupeAssetItems([...uploadedAssets, ...sessionAssets]).sort(
       (left, right) => parseDisplayTimestamp(right.sortAt ?? right.updatedAt) - parseDisplayTimestamp(left.sortAt ?? left.updatedAt),
     );
     return merged;
-  }, [persistedAssets, persistedItems, workspaceRuns]);
+  }, [persistedAssets, workspaceRuns]);
 
   const currentViewTitle = useMemo(() => {
     const titleMap: Record<AppView, string> = {
@@ -472,6 +515,7 @@ export default function App() {
       fusion: "多图融合",
       history: "历史记录",
       "grayscale-relief": "转灰度图",
+      "remove-background": "去除背景",
       "asset-management": "资产管理",
       admin: "系统管理",
     };
@@ -508,7 +552,7 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <LoginPage error={authError} onLogin={handleLogin} />;
+    return <LoginPage error={authError} onLogin={handleLogin} onRegister={handleRegister} />;
   }
 
   return (
@@ -531,7 +575,7 @@ export default function App() {
           <MultiViewPage assetItems={assetItems} onRecordRun={recordWorkspaceRun} pageRuns={multiViewRuns} onDeleteHistory={handleDeleteHistory} />
         </section>
         <section className={activeView === "multi-view-split" ? "view-panel active" : "view-panel hidden"}>
-          <MultiViewSplitPage assetItems={assetItems} onRecordRun={recordWorkspaceRun} pageRuns={multiViewSplitRuns} />
+          <MultiViewSplitPage assetItems={assetItems} onRecordRun={recordWorkspaceRun} pageRuns={multiViewSplitRuns} onDeleteHistory={handleDeleteHistory} />
         </section>
         <section className={activeView === "image-edit" ? "view-panel active" : "view-panel hidden"}>
           <ImageEditPage assetItems={assetItems} onRecordRun={recordWorkspaceRun} pageRuns={imageEditRuns} onDeleteHistory={handleDeleteHistory} />
@@ -548,8 +592,11 @@ export default function App() {
         <section className={activeView === "grayscale-relief" ? "view-panel active" : "view-panel hidden"}>
           <GrayscaleReliefPage assetItems={assetItems} onRecordRun={recordWorkspaceRun} pageRuns={grayscaleRuns} onDeleteHistory={handleDeleteHistory} />
         </section>
+        <section className={activeView === "remove-background" ? "view-panel active" : "view-panel hidden"}>
+          <RemoveBackgroundPage assetItems={assetItems} />
+        </section>
         <section className={activeView === "fusion" ? "view-panel active" : "view-panel hidden"}>
-          <FusionStudio onRecordRun={recordWorkspaceRun} assetItems={assetItems} pageRuns={fusionRuns} />
+          <FusionStudio onRecordRun={recordWorkspaceRun} assetItems={assetItems} pageRuns={fusionRuns} onDeleteHistory={handleDeleteHistory} />
         </section>
         <section className={activeView === "history" ? "view-panel active" : "view-panel hidden"}>
           <HistoryPage workspaceRuns={workspaceRuns} persistedItems={persistedItems} persistedError={persistedError} onDeleteHistory={handleDeleteHistory} />
@@ -569,25 +616,29 @@ export default function App() {
         <section className={activeView === "admin" ? "view-panel active" : "view-panel hidden"}>
           <AdminPage
             users={adminUsers}
+            systemStatus={adminSystemStatus}
             loading={adminLoading}
             error={adminError}
-            onRefresh={refreshAdminUsers}
+            onRefresh={refreshAdminData}
             onCreateUser={async (payload) => {
               await createAdminUser(payload);
-              await refreshAdminUsers();
+              await refreshAdminData();
             }}
             onToggleDisabled={async (user) => {
               await updateAdminUser(user.id, { is_disabled: !user.is_disabled });
-              await refreshAdminUsers();
+              await refreshAdminData();
+            }}
+            onDeleteUser={async (user) => {
+              await deleteAdminUser(user.id);
+              await refreshAdminData();
             }}
             onResetPassword={async (user, password) => {
               await resetAdminUserPassword(user.id, password);
             }}
             onSavePermissions={async (user, permissions) => {
               await updateAdminUserPermissions(user.id, permissions);
-              await refreshAdminUsers();
+              await refreshAdminData();
             }}
-            onUploadCommunityAsset={handleUploadCommunityAsset}
           />
         </section>
       </main>

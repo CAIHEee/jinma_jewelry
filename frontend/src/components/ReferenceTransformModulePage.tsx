@@ -35,7 +35,10 @@ interface ReferenceTransformModulePageProps {
   module: PromptTemplate["module"];
   historyKind: "product_refine" | "gemstone_design" | "upscale";
   endpointPath: string;
-  defaultPrompt: string;
+  defaultPrompt?: string;
+  allowMultipleSources?: boolean;
+  hideModelSelector?: boolean;
+  hidePromptEditor?: boolean;
   imageSize?: "1K" | "2K";
 }
 
@@ -61,10 +64,15 @@ export function ReferenceTransformModulePage({
   historyKind,
   endpointPath,
   defaultPrompt,
+  allowMultipleSources = false,
+  hideModelSelector = false,
+  hidePromptEditor = false,
   imageSize = "1K",
 }: ReferenceTransformModulePageProps) {
   const templates = getPromptTemplatesByModule(module);
-  const initialPrompt = templates[0]?.chinese ?? defaultPrompt;
+  const initialPrompt = hidePromptEditor
+    ? (defaultPrompt ?? "")
+    : (defaultPrompt !== undefined ? defaultPrompt : (templates[0]?.chinese ?? ""));
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
   const [prompt, setPrompt] = useState(initialPrompt);
   const [model, setModel] = useState(defaultModelId);
@@ -112,15 +120,23 @@ export function ReferenceTransformModulePage({
     setLoading(true);
     setError(null);
     try {
+      const selectedAssetUrls = selectedAssets
+        .map((asset) => asset.fileUrl ?? asset.previewUrl ?? asset.storageUrl ?? null)
+        .filter((url): url is string => Boolean(url));
+      const selectedAssetNames = selectedAssets.map((asset) => asset.name);
+      const inputFiles = allowMultipleSources ? files : files.slice(0, 1);
       const selectedAsset = selectedAssets[0] ?? null;
-      const selectedAssetUrl = selectedAsset?.fileUrl ?? selectedAsset?.previewUrl ?? selectedAsset?.storageUrl ?? null;
-      const inputFile = files[0] ?? null;
-      if (!inputFile && !selectedAssetUrl) throw new Error("未获取到可用参考图");
+      const selectedAssetUrl = selectedAssetUrls[0] ?? null;
+      const inputFile = inputFiles[0] ?? null;
+      if (inputFiles.length === 0 && selectedAssetUrls.length === 0) throw new Error("未获取到可用参考图");
 
       const response = await submitReferenceModuleTransform(endpointPath, {
-        file: inputFile,
-        sourceImageUrl: inputFile ? undefined : selectedAssetUrl ?? undefined,
-        sourceImageName: inputFile ? undefined : selectedAsset?.name,
+        files: allowMultipleSources ? inputFiles : undefined,
+        file: allowMultipleSources ? undefined : inputFile,
+        sourceImageUrls: allowMultipleSources && inputFiles.length === 0 ? selectedAssetUrls : undefined,
+        sourceImageNames: allowMultipleSources && inputFiles.length === 0 ? selectedAssetNames : undefined,
+        sourceImageUrl: !allowMultipleSources && !inputFile ? selectedAssetUrl ?? undefined : undefined,
+        sourceImageName: !allowMultipleSources && !inputFile ? selectedAsset?.name : undefined,
         model: selectedModel.id,
         prompt,
         feature,
@@ -136,7 +152,13 @@ export function ReferenceTransformModulePage({
         provider: response.provider,
         status: response.status,
         imageUrl: response.image_url,
-        sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
+        sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssetUrls[0] ?? null,
+        sourceImages:
+          inputFiles.length > 0
+            ? uploadedPreviewUrl
+              ? [uploadedPreviewUrl]
+              : []
+            : selectedAssetUrls,
         prompt,
       });
     } catch (submitError) {
@@ -154,30 +176,35 @@ export function ReferenceTransformModulePage({
             <AssetSourcePicker
               title={sourcePickerTitle}
               assetItems={assetItems}
+              allowMultiple={allowMultipleSources}
               uploadLabel={uploadLabel}
               onUploadFilesChange={setFiles}
               onSelectedAssetsChange={setSelectedAssets}
             />
 
-            <label className="input-group compact-input-group">
-              <span>模型</span>
-              <select value={model} onChange={(event) => setModel(event.target.value)} disabled={models.length === 0}>
-                {models.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-              {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
-            </label>
+            {!hideModelSelector ? (
+              <label className="input-group compact-input-group">
+                <span>模型</span>
+                <select value={model} onChange={(event) => setModel(event.target.value)} disabled={models.length === 0}>
+                  {models.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                {modelError ? <small>{modelError}</small> : selectedModel ? <small>{selectedModel.pricing_hint}</small> : null}
+              </label>
+            ) : null}
 
-            <label className="input-group prompt-input-group compact-prompt-group">
-              <div className="prompt-input-header compact-prompt-header">
-                <span>{promptLabel}</span>
-                <PromptTemplateImporter templates={templates} onImport={setPrompt} />
-              </div>
-              <AutoResizeTextarea className="prompt-textarea" rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-            </label>
+            {!hidePromptEditor ? (
+              <label className="input-group prompt-input-group compact-prompt-group">
+                <div className="prompt-input-header compact-prompt-header">
+                  <span>{promptLabel}</span>
+                  <PromptTemplateImporter templates={templates} onImport={setPrompt} />
+                </div>
+                <AutoResizeTextarea className="prompt-textarea" rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+              </label>
+            ) : null}
 
             {error ? <p className="error-text">{error}</p> : null}
 
