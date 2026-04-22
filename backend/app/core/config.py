@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     ttapi_poll_interval_seconds: float = Field(default=2.5, alias="TTAPI_POLL_INTERVAL_SECONDS")
     ttapi_poll_attempts: int = Field(default=24, alias="TTAPI_POLL_ATTEMPTS")
     database_url: str = Field(default="sqlite:///./data/app.db", alias="DATABASE_URL")
+    db_pool_size: int = Field(default=10, alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(default=20, alias="DB_MAX_OVERFLOW")
+    db_pool_recycle_seconds: int = Field(default=3600, alias="DB_POOL_RECYCLE_SECONDS")
     auth_secret_key: str = Field(default="change-me-in-production", alias="AUTH_SECRET_KEY")
     auth_token_expire_hours: int = Field(default=24, alias="AUTH_TOKEN_EXPIRE_HOURS")
     auth_cookie_name: str = Field(default="jinma_auth_token", alias="AUTH_COOKIE_NAME")
@@ -50,6 +53,12 @@ class Settings(BaseSettings):
     oss_access_key_id: str | None = Field(default=None, alias="OSS_ACCESS_KEY_ID")
     oss_access_key_secret: str | None = Field(default=None, alias="OSS_ACCESS_KEY_SECRET")
     oss_signed_url_expire_seconds: int = Field(default=3600, alias="OSS_SIGNED_URL_EXPIRE_SECONDS")
+    queue_redis_url: str = Field(default="redis://127.0.0.1:6379/0", alias="QUEUE_REDIS_URL")
+    queue_name: str = Field(default="jinma-ai", alias="QUEUE_NAME")
+    queue_job_timeout_seconds: int = Field(default=900, alias="QUEUE_JOB_TIMEOUT_SECONDS")
+    queue_result_ttl_seconds: int = Field(default=3600, alias="QUEUE_RESULT_TTL_SECONDS")
+    queue_user_max_active_jobs: int = Field(default=1, alias="QUEUE_USER_MAX_ACTIVE_JOBS")
+    queue_root_max_active_jobs: int = Field(default=3, alias="QUEUE_ROOT_MAX_ACTIVE_JOBS")
 
     @property
     def allowed_origins(self) -> list[str]:

@@ -21,8 +21,21 @@ if database_url.startswith("sqlite:///./"):
     database_url = f"sqlite:///{db_absolute_path.as_posix()}"
 
 connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+engine_kwargs = {
+    "future": True,
+    "connect_args": connect_args,
+    "pool_pre_ping": True,
+}
+if not database_url.startswith("sqlite"):
+    engine_kwargs.update(
+        {
+            "pool_size": settings.db_pool_size,
+            "max_overflow": settings.db_max_overflow,
+            "pool_recycle": settings.db_pool_recycle_seconds,
+        }
+    )
 
-engine = create_engine(database_url, future=True, connect_args=connect_args, pool_pre_ping=True)
+engine = create_engine(database_url, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 

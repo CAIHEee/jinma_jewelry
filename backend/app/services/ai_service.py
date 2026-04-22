@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from math import ceil
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote, urlencode
 from uuid import uuid4
 
@@ -144,6 +144,7 @@ MODEL_CATALOG: dict[str, TTAPIModelConfig] = {
 }
 
 _request_user: ContextVar[User | None] = ContextVar("ai_request_user", default=None)
+_job_stage_callback: ContextVar[Callable[[str], None] | None] = ContextVar("ai_job_stage_callback", default=None)
 
 
 class AIService:
@@ -212,8 +213,15 @@ class AIService:
             ]
         )
 
-    async def generate_text_to_image(self, request: TextToImageRequest, *, current_user: User) -> GenerationResult:
+    async def generate_text_to_image(
+        self,
+        request: TextToImageRequest,
+        *,
+        current_user: User,
+        stage_callback: Callable[[str], None] | None = None,
+    ) -> GenerationResult:
         context_token = _request_user.set(current_user)
+        stage_token = _job_stage_callback.set(stage_callback)
         model = self._get_model_or_404(request.model)
         try:
             if not model.supports_text_to_image:
@@ -231,6 +239,7 @@ class AIService:
                 return await self._generate_with_gemini(request=request, model=model)
             return await self._generate_with_flux(request=request, model=model)
         finally:
+            _job_stage_callback.reset(stage_token)
             _request_user.reset(context_token)
 
     async def fuse_images(
@@ -240,8 +249,10 @@ class AIService:
         metadata: FusionRequestMetadata,
         current_user: User,
         source_image_urls: list[str] | None = None,
+        stage_callback: Callable[[str], None] | None = None,
     ) -> FusionJobAccepted:
         context_token = _request_user.set(current_user)
+        stage_token = _job_stage_callback.set(stage_callback)
         model = self._get_model_or_404(metadata.model)
         try:
             if not model.supports_multi_image_fusion:
@@ -319,6 +330,7 @@ class AIService:
                 raw_response=result.raw_response,
             )
         finally:
+            _job_stage_callback.reset(stage_token)
             _request_user.reset(context_token)
 
     async def transform_reference_image(
@@ -328,12 +340,14 @@ class AIService:
         metadata: ReferenceImageRequestMetadata,
         current_user: User,
         source_image_url: str | None = None,
+        stage_callback: Callable[[str], None] | None = None,
     ) -> GenerationResult:
         return await self.transform_reference_images(
             files=[file] if file is not None else [],
             metadata=metadata,
             current_user=current_user,
             source_image_urls=[source_image_url] if source_image_url else None,
+            stage_callback=stage_callback,
         )
 
     async def transform_reference_images(
@@ -343,8 +357,10 @@ class AIService:
         metadata: ReferenceImageRequestMetadata,
         current_user: User,
         source_image_urls: list[str] | None = None,
+        stage_callback: Callable[[str], None] | None = None,
     ) -> GenerationResult:
         context_token = _request_user.set(current_user)
+        stage_token = _job_stage_callback.set(stage_callback)
         model = self._get_model_or_404(metadata.model)
         try:
             if not model.supports_reference_images:
@@ -447,6 +463,7 @@ class AIService:
                 return await self._transform_with_gemini(files=submit_files, metadata=metadata, model=model)
             return await self._transform_with_flux(files=submit_files, metadata=metadata, model=model)
         finally:
+            _job_stage_callback.reset(stage_token)
             _request_user.reset(context_token)
 
     async def generate_multi_view(
@@ -456,6 +473,7 @@ class AIService:
         metadata: ReferenceImageRequestMetadata,
         current_user: User,
         source_image_url: str | None = None,
+        stage_callback: Callable[[str], None] | None = None,
     ) -> GenerationResult:
         if metadata.feature != "multi_view":
             metadata = metadata.model_copy(update={"feature": "multi_view"})
@@ -463,10 +481,23 @@ class AIService:
         # Multi-view is still backed by reference-image generation upstream,
         # but we keep a dedicated service entry so the route, history metadata,
         # and future provider-specific handling stay isolated from generic edits.
-        return await self.transform_reference_image(file=file, metadata=metadata, current_user=current_user, source_image_url=source_image_url)
+        return await self.transform_reference_image(
+            file=file,
+            metadata=metadata,
+            current_user=current_user,
+            source_image_url=source_image_url,
+            stage_callback=stage_callback,
+        )
 
-    async def split_multi_view_image(self, payload: MultiViewSplitRequest, *, current_user: User) -> MultiViewSplitResponse:
+    async def split_multi_view_image(
+        self,
+        payload: MultiViewSplitRequest,
+        *,
+        current_user: User,
+        stage_callback: Callable[[str], None] | None = None,
+    ) -> MultiViewSplitResponse:
         context_token = _request_user.set(current_user)
+        stage_token = _job_stage_callback.set(stage_callback)
         image_bytes, _ = await self._download_image(payload.image_url)
         try:
             split_assets = await self._split_and_store_multi_view_assets(
@@ -512,6 +543,7 @@ class AIService:
             )
             return response
         finally:
+            _job_stage_callback.reset(stage_token)
             _request_user.reset(context_token)
 
     async def remove_background_image(
@@ -1754,6 +1786,7 @@ class AIService:
         if not image_url:
             return {"storage_url": None, "access_url": None, "metadata": {}}
 
+        self._notify_stage("uploading")
         request_user = self._require_request_user()
         if not self.storage_service.is_configured():
             image_bytes, content_type = await self._download_image(image_url)
@@ -1841,6 +1874,7 @@ class AIService:
         preferred_name: str | None = None,
         name_suffix: str | None = None,
     ) -> dict[str, Any]:
+        self._notify_stage("uploading")
         request_user = self._require_request_user()
         fallback_name = self._generated_asset_name(
             kind=kind,
@@ -1970,6 +2004,11 @@ class AIService:
         if user is None:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Missing request user context.")
         return user
+
+    def _notify_stage(self, stage: str) -> None:
+        callback = _job_stage_callback.get()
+        if callback is not None:
+            callback(stage)
 
     async def _build_upload_file_from_url(self, image_url: str, filename: str | None = None) -> UploadFile:
         image_bytes, content_type = await self._download_image(image_url)

@@ -175,6 +175,7 @@ npm run dev
 GET  /health
 GET  /api/v1/system/summary
 GET  /api/v1/ai/models
+GET  /api/v1/ai/jobs/{job_id}
 GET  /api/v1/history
 GET  /api/v1/assets
 POST /api/v1/ai/text-to-image
@@ -182,7 +183,48 @@ POST /api/v1/ai/fuse-images
 POST /api/v1/ai/reference-image-transform
 POST /api/v1/ai/multi-view
 POST /api/v1/ai/split-multi-view
+POST /api/v1/ai/jobs/text-to-image
+POST /api/v1/ai/jobs/fuse-images
+POST /api/v1/ai/jobs/reference-image-transform
+POST /api/v1/ai/jobs/product-refine
+POST /api/v1/ai/jobs/gemstone-design
+POST /api/v1/ai/jobs/upscale
+POST /api/v1/ai/jobs/multi-view
+POST /api/v1/ai/jobs/split-multi-view
 ```
+
+## 单机并发部署
+
+当前阶段不需要额外引入 Nginx 做负载均衡。单机内网部署时，先使用多 Web worker + Redis/RQ 队列 worker：
+
+```bash
+cd backend
+conda activate jinma_jewelry
+pip install -r requirements.txt
+redis-server
+gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 2
+```
+
+另开两个终端启动队列 worker：
+
+```bash
+cd backend
+conda activate jinma_jewelry
+python -m app.worker
+```
+
+```bash
+cd backend
+conda activate jinma_jewelry
+python -m app.worker
+```
+
+说明：
+
+- 旧同步生图接口仍保留，可用于回滚和对比。
+- 新任务接口会立即返回 `job_id`，再通过 `GET /api/v1/ai/jobs/{job_id}` 查询 `queued`、`running`、`uploading`、`succeeded`、`failed`。
+- 普通用户默认最多同时 1 个任务，root 默认最多 3 个任务，可通过 `QUEUE_USER_MAX_ACTIVE_JOBS` 和 `QUEUE_ROOT_MAX_ACTIVE_JOBS` 调整。
+- 如果后续扩到多台服务器，再在前面加 Nginx 或其他反向代理做多机负载均衡。
 
 ## 数据库初始化
 
@@ -222,4 +264,3 @@ DATABASE_URL=mysql+pymysql://root:123456@192.168.10.150:3306/jinma
 - 转灰度图
 - 历史记录
 - 资产管理
-

@@ -22,6 +22,7 @@ def run_migrations(engine: Engine) -> None:
     migrations = [
         ("20260420_auth_assets", _apply_auth_assets_migration),
         ("20260422_user_soft_delete", _apply_user_soft_delete_migration),
+        ("20260422_generation_jobs", _apply_generation_jobs_migration),
     ]
 
     for version, migration in migrations:
@@ -222,3 +223,44 @@ def _apply_auth_assets_migration(engine: Engine) -> None:
 def _apply_user_soft_delete_migration(engine: Engine) -> None:
     _add_column_if_missing(engine, "users", "deleted_at", "DATETIME")
     _create_index_if_missing(engine, "users", "ix_users_deleted_at", "deleted_at")
+
+
+def _apply_generation_jobs_migration(engine: Engine) -> None:
+    dialect = engine.dialect.name
+    dt_type = "DATETIME" if dialect == "sqlite" else "DATETIME(6)"
+
+    if not inspect(engine).has_table("generation_jobs"):
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    f"""
+                    CREATE TABLE generation_jobs (
+                        id VARCHAR(36) PRIMARY KEY NOT NULL,
+                        user_id VARCHAR(36) NOT NULL,
+                        queue_name VARCHAR(64) NOT NULL,
+                        rq_job_id VARCHAR(64) NOT NULL,
+                        feature_key VARCHAR(64) NOT NULL,
+                        model VARCHAR(128) NULL,
+                        prompt TEXT NULL,
+                        status VARCHAR(32) NOT NULL,
+                        request_json TEXT NULL,
+                        result_json TEXT NULL,
+                        error_message TEXT NULL,
+                        started_at {dt_type} NULL,
+                        completed_at {dt_type} NULL,
+                        created_at {dt_type} NOT NULL,
+                        updated_at {dt_type} NOT NULL,
+                        FOREIGN KEY(user_id) REFERENCES users(id)
+                    )
+                    """
+                )
+            )
+
+    _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_user_id", "user_id")
+    _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_queue_name", "queue_name")
+    _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_rq_job_id", "rq_job_id", unique=True)
+    _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_feature_key", "feature_key")
+    _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_model", "model")
+    _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_status", "status")
+    _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_user_status", "user_id, status")
+    _create_index_if_missing(engine, "generation_jobs", "ix_generation_jobs_feature_status", "feature_key, status")
