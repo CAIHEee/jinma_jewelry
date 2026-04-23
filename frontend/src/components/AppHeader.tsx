@@ -6,9 +6,11 @@ interface AppHeaderProps {
   title: string;
   currentUser: CurrentUser;
   onLogout: () => Promise<void> | void;
+  onOpenNavigation?: () => void;
+  showNavigationButton?: boolean;
 }
 
-export function AppHeader({ title, currentUser, onLogout }: AppHeaderProps) {
+export function AppHeader({ title, currentUser, onLogout, onOpenNavigation, showNavigationButton = false }: AppHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -28,9 +30,24 @@ export function AppHeader({ title, currentUser, onLogout }: AppHeaderProps) {
 
   return (
     <header className="topbar">
-      <div>
-        <p className="eyebrow">金马珠宝 AI 设计台</p>
-        <h1>{title}</h1>
+      <div className="topbar-main">
+        {showNavigationButton ? (
+          <button
+            className="topbar-nav-button"
+            type="button"
+            onClick={onOpenNavigation}
+            aria-label="打开导航菜单"
+            title="打开导航菜单"
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+        ) : null}
+        <div className="topbar-title-block">
+          <p className="eyebrow">金马珠宝 AI 设计台</p>
+          <h1>{title}</h1>
+        </div>
       </div>
       <div className="topbar-actions">
         <div className="topbar-user-menu" ref={menuRef}>

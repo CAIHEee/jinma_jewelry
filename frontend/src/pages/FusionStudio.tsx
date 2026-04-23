@@ -253,7 +253,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
               <AutoResizeTextarea className="prompt-textarea" value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} />
             </label>
 
-            <details className="drawer-panel inner-drawer" open>
+            <details className="drawer-panel inner-drawer">
               <summary className="drawer-summary compact-drawer-summary">
                 <div>
                   <h4>高级设置</h4>

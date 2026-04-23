@@ -7,6 +7,9 @@ interface SidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   currentUser: CurrentUser;
+  mobile?: boolean;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 const baseCreationItems: Array<{ key: AppView; label: string; helper: string; icon: string; featured?: boolean; moduleKey?: string; rootOnly?: boolean }> = [
@@ -68,10 +71,12 @@ function hasPermission(currentUser: CurrentUser, moduleKey?: string, rootOnly?: 
   return currentUser.permissions.some((item) => item.module_key === moduleKey && item.is_enabled);
 }
 
-export function Sidebar({ activeView, onChange, collapsed, onToggleCollapse, currentUser }: SidebarProps) {
+export function Sidebar({ activeView, onChange, collapsed, onToggleCollapse, currentUser, mobile = false, mobileOpen = false, onCloseMobile }: SidebarProps) {
   const navGroups = buildNavGroups(currentUser);
   return (
-    <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
+    <>
+      {mobile && mobileOpen ? <button className="sidebar-mobile-backdrop" type="button" aria-label="关闭导航菜单" onClick={onCloseMobile} /> : null}
+      <aside className={[collapsed ? "sidebar collapsed" : "sidebar", mobile ? "mobile-sidebar" : "", mobileOpen ? "mobile-open" : ""].filter(Boolean).join(" ")}>
       <div className="sidebar-topbar">
         <div className="brand-block sidebar-brand">
           <p className="eyebrow">JINMA JEWELRY</p>
@@ -79,15 +84,21 @@ export function Sidebar({ activeView, onChange, collapsed, onToggleCollapse, cur
           {!collapsed ? <p className="sidebar-copy">珠宝设计生成、编辑、资产沉淀一体化工作台</p> : null}
         </div>
 
-        <button
-          type="button"
-          className="sidebar-collapse-button"
-          onClick={onToggleCollapse}
-          aria-label={collapsed ? "展开导航栏" : "收起导航栏"}
-          title={collapsed ? "展开导航栏" : "收起导航栏"}
-        >
-          {collapsed ? "›" : "‹"}
-        </button>
+        {!mobile ? (
+          <button
+            type="button"
+            className="sidebar-collapse-button"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? "展开导航栏" : "收起导航栏"}
+            title={collapsed ? "展开导航栏" : "收起导航栏"}
+          >
+            {collapsed ? "›" : "‹"}
+          </button>
+        ) : (
+          <button className="sidebar-mobile-close" type="button" onClick={onCloseMobile} aria-label="关闭导航菜单" title="关闭导航菜单">
+            ×
+          </button>
+        )}
       </div>
 
       <nav className="sidebar-nav">
@@ -97,7 +108,16 @@ export function Sidebar({ activeView, onChange, collapsed, onToggleCollapse, cur
             return null;
           }
           return (
-            <div className="nav-group" key={group.title ?? `group-${groupIndex}`}>
+            <div
+              className={[
+                "nav-group",
+                !group.title ? "nav-group-utility" : "",
+                group.title === "Root" ? "nav-group-root" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              key={group.title ?? `group-${groupIndex}`}
+            >
               {group.title && !collapsed ? <div className="nav-section-title">{group.title}</div> : null}
               <div className={items.length === 1 ? "nav-card-grid single" : "nav-card-grid"}>
                 {items.map((item) => (
@@ -112,7 +132,12 @@ export function Sidebar({ activeView, onChange, collapsed, onToggleCollapse, cur
                     ]
                       .filter(Boolean)
                       .join(" ")}
-                    onClick={() => onChange(item.key)}
+                    onClick={() => {
+                      onChange(item.key);
+                      if (mobile) {
+                        onCloseMobile?.();
+                      }
+                    }}
                     title={collapsed ? item.label : undefined}
                   >
                     <span className={`nav-icon ${item.icon}`} aria-hidden="true" />
@@ -125,6 +150,7 @@ export function Sidebar({ activeView, onChange, collapsed, onToggleCollapse, cur
           );
         })}
       </nav>
-    </aside>
+      </aside>
+    </>
   );
 }

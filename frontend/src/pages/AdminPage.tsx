@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { SectionHeader } from "../components/SectionHeader";
+import { useViewport } from "../hooks/useViewport";
 import type { AdminSystemStatus, AdminUser } from "../types/admin";
 import type { ModulePermissionItem } from "../types/auth";
 
@@ -61,6 +62,7 @@ export function AdminPage({
   onResetPassword,
   onSavePermissions,
 }: AdminPageProps) {
+  const { isMobile } = useViewport();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [draftPermissions, setDraftPermissions] = useState<Record<string, boolean>>({});
   const [createUserState, setCreateUserState] = useState<CreateUserState>(null);
@@ -316,6 +318,7 @@ export function AdminPage({
 
       <section className="panel compact-panel">
         <SectionHeader eyebrow="Root" title="系统管理" description="仅 root 可见，集中管理系统状态、用户账号与模块权限。" />
+        {isMobile ? <p className="admin-mobile-hint">手机端已做简化适配，复杂权限批量编辑建议在平板或电脑端操作。</p> : null}
         <div className="inline-action-row">
           <button
             className="primary-button compact-button"

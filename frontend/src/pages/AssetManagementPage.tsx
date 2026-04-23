@@ -135,7 +135,7 @@ export function AssetManagementPage({
         </div>
       ) : null}
 
-      <section className="panel compact-panel">
+      <section className="panel compact-panel asset-management-panel">
         <div className="asset-primary-nav">
           <button
             className={activeTab === "mine" ? "asset-primary-nav-button active" : "asset-primary-nav-button"}
@@ -228,34 +228,50 @@ export function AssetManagementPage({
                 <div className="inline-action-row asset-card-action-row">
                   {canPreview ? (
                     <a
-                      className="secondary-button compact-button asset-action-button"
+                      className="history-icon-button asset-action-button"
                       href={buildDownloadUrl(item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? null, buildDownloadFilename(item.name, item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? null)) ?? item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? undefined}
                       download={buildDownloadFilename(item.name, item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? null)}
+                      title="下载图片"
+                      aria-label="下载图片"
                     >
-                      下载图片
+                      <span aria-hidden="true">↓</span>
                     </a>
                   ) : null}
 
                   {item.persistedAssetId && item.scope !== "community" && item.canPublish && onPublishAsset ? (
-                    <button className="secondary-button compact-button asset-action-button" type="button" onClick={() => void handlePublish(item.persistedAssetId!)}>
-                      发布到社区
+                    <button
+                      className="history-icon-button asset-action-button"
+                      type="button"
+                      onClick={() => void handlePublish(item.persistedAssetId!)}
+                      title="发布到社区"
+                      aria-label="发布到社区"
+                    >
+                      <span aria-hidden="true">↗</span>
                     </button>
                   ) : null}
 
                   {item.persistedAssetId && item.canUnpublish && onUnpublishAsset ? (
-                    <button className="secondary-button compact-button asset-action-button" type="button" onClick={() => void handleUnpublish(item.persistedAssetId!)}>
-                      撤回社区
+                    <button
+                      className="history-icon-button asset-action-button"
+                      type="button"
+                      onClick={() => void handleUnpublish(item.persistedAssetId!)}
+                      title="撤回社区"
+                      aria-label="撤回社区"
+                    >
+                      <span aria-hidden="true">↙</span>
                     </button>
                   ) : null}
 
                   {item.deletable && (item.persistedAssetId || item.persistedHistoryId) ? (
                     <button
-                      className="secondary-button compact-button asset-action-button"
+                      className="history-icon-button asset-action-button"
                       type="button"
                       onClick={() => void handleDelete(item)}
                       disabled={deletingAssetId === (item.persistedAssetId ?? item.persistedHistoryId ?? null)}
+                      title={deletingAssetId === (item.persistedAssetId ?? item.persistedHistoryId ?? null) ? "删除中" : "删除资产"}
+                      aria-label={deletingAssetId === (item.persistedAssetId ?? item.persistedHistoryId ?? null) ? "删除中" : "删除资产"}
                     >
-                      {deletingAssetId === (item.persistedAssetId ?? item.persistedHistoryId ?? null) ? "删除中..." : "删除资产"}
+                      <span aria-hidden="true">{deletingAssetId === (item.persistedAssetId ?? item.persistedHistoryId ?? null) ? "…" : "×"}</span>
                     </button>
                   ) : null}
                 </div>

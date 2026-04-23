@@ -213,7 +213,7 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
               onSelectedAssetsChange={setSelectedAssets}
             />
 
-            <details className="drawer-panel inner-drawer" open>
+            <details className="drawer-panel inner-drawer">
               <summary className="drawer-summary compact-drawer-summary">
                 <div>
                   <h4>切图设置</h4>

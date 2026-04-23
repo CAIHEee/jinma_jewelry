@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { FloatingToast } from "./FloatingToast";
+import { useViewport } from "../hooks/useViewport";
 import { appendSecondSuffixToName, buildDownloadFilename, buildDownloadUrl } from "../utils/download";
 import { formatHistoryTimestamp } from "../utils/history";
 import type { ModuleHistoryEntry } from "../utils/history";
@@ -14,6 +15,7 @@ interface PageGenerationHistoryProps {
 }
 
 export function PageGenerationHistory({ title, items, activeId, onPreview, onDeleteHistory }: PageGenerationHistoryProps) {
+  const { isMobile } = useViewport();
   const [collapsed, setCollapsed] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<ModuleHistoryEntry | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
@@ -42,9 +44,9 @@ export function PageGenerationHistory({ title, items, activeId, onPreview, onDel
   }
 
   return (
-    <aside className={collapsed ? "page-history-sidebar collapsed" : "page-history-sidebar"}>
+    <aside className={collapsed && !isMobile ? "page-history-sidebar collapsed" : "page-history-sidebar"}>
       <div className="page-history-sidebar-header">
-        {!collapsed ? (
+        {!collapsed || isMobile ? (
           <div className="stack-list compact-stack">
             <h4>{title}</h4>
           </div>
@@ -52,18 +54,20 @@ export function PageGenerationHistory({ title, items, activeId, onPreview, onDel
           <span className="page-history-sidebar-mini-title">历史</span>
         )}
 
-        <button
-          className={collapsed ? "page-history-toggle-button collapsed" : "page-history-toggle-button"}
-          type="button"
-          onClick={() => setCollapsed((value) => !value)}
-          aria-label={collapsed ? "展开历史记录侧栏" : "收起历史记录侧栏"}
-          title={collapsed ? "展开历史记录" : "收起历史记录"}
-        >
-          <span className="page-history-toggle-icon" aria-hidden="true">
-            {collapsed ? ">" : "<"}
-          </span>
-          {!collapsed ? <span>收起</span> : null}
-        </button>
+        {!isMobile ? (
+          <button
+            className={collapsed ? "page-history-toggle-button collapsed" : "page-history-toggle-button"}
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            aria-label={collapsed ? "展开历史记录侧栏" : "收起历史记录侧栏"}
+            title={collapsed ? "展开历史记录" : "收起历史记录"}
+          >
+            <span className="page-history-toggle-icon" aria-hidden="true">
+              {collapsed ? ">" : "<"}
+            </span>
+            {!collapsed ? <span>收起</span> : null}
+          </button>
+        ) : null}
       </div>
 
       <div className={items.length === 0 ? "page-history-sidebar-body page-history-sidebar-body-empty" : "page-history-sidebar-body"}>
@@ -101,7 +105,7 @@ export function PageGenerationHistory({ title, items, activeId, onPreview, onDel
                   ) : null}
                 </button>
 
-                {!collapsed && onDeleteHistory && item.source === "persisted" && item.persistedId ? (
+                {(!collapsed || isMobile) && onDeleteHistory && item.source === "persisted" && item.persistedId ? (
                   <div className="page-history-card-actions">
                     {item.imageUrl ? (
                       <a
@@ -125,7 +129,7 @@ export function PageGenerationHistory({ title, items, activeId, onPreview, onDel
                       <span aria-hidden="true">{deletingHistoryId === item.persistedId ? "…" : "×"}</span>
                     </button>
                   </div>
-                ) : !collapsed && item.imageUrl ? (
+                ) : (!collapsed || isMobile) && item.imageUrl ? (
                   <div className="page-history-card-actions">
                     <a
                       className="history-icon-button"

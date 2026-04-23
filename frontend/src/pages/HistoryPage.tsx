@@ -154,37 +154,43 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
                       >
                         <img className="generated-image image-fit-contain" src={item.imageUrl} alt={item.title} />
                       </button>
-                      <div className="inline-action-row">
+                      <div className="page-history-card-actions history-page-actions">
                         <a
-                          className="secondary-button"
+                          className="history-icon-button"
                           href={buildDownloadUrl(item.imageUrl, buildDownloadFilename(resolveHistoryDownloadName(item), item.imageUrl)) ?? item.imageUrl}
                           download={buildDownloadFilename(resolveHistoryDownloadName(item), item.imageUrl)}
+                          title="下载图片"
+                          aria-label="下载图片"
                         >
-                          下载图片
+                          <span aria-hidden="true">↓</span>
                         </a>
                         {item.source === "persisted" && item.persistedId ? (
                           <button
-                            className="secondary-button"
+                            className="history-icon-button"
                             type="button"
                             onClick={() => setPendingDeleteItem(item)}
                             disabled={deletingHistoryId === item.persistedId}
+                            title={deletingHistoryId === item.persistedId ? "删除中" : "删除记录"}
+                            aria-label={deletingHistoryId === item.persistedId ? "删除中" : "删除记录"}
                           >
-                            {deletingHistoryId === item.persistedId ? "删除中..." : "删除记录"}
+                            <span aria-hidden="true">{deletingHistoryId === item.persistedId ? "…" : "×"}</span>
                           </button>
                         ) : null}
                       </div>
                     </>
                   ) : (
-                    <div className="inline-action-row">
+                    <div className="inline-action-row history-page-empty-actions">
                       <span className="status-pill idle">{item.status}</span>
                       {item.source === "persisted" && item.persistedId ? (
                         <button
-                          className="secondary-button"
+                          className="history-icon-button"
                           type="button"
                           onClick={() => setPendingDeleteItem(item)}
                           disabled={deletingHistoryId === item.persistedId}
+                          title={deletingHistoryId === item.persistedId ? "删除中" : "删除记录"}
+                          aria-label={deletingHistoryId === item.persistedId ? "删除中" : "删除记录"}
                         >
-                          {deletingHistoryId === item.persistedId ? "删除中..." : "删除记录"}
+                          <span aria-hidden="true">{deletingHistoryId === item.persistedId ? "…" : "×"}</span>
                         </button>
                       ) : null}
                     </div>

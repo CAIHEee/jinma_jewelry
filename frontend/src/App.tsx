@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AppHeader } from "./components/AppHeader";
 import { Sidebar } from "./components/Sidebar";
+import { useViewport } from "./hooks/useViewport";
 import { AdminPage } from "./pages/AdminPage";
 import { AssetManagementPage } from "./pages/AssetManagementPage";
 import { FusionStudio } from "./pages/FusionStudio";
@@ -292,8 +293,10 @@ function firstAvailableView(user: CurrentUser): AppView {
 }
 
 export default function App() {
+  const { isMobile, isTablet } = useViewport();
   const [activeView, setActiveView] = useState<AppView>("text-to-image");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [workspaceRuns, setWorkspaceRuns] = useState<WorkspaceRun[]>([]);
   const [persistedItems, setPersistedItems] = useState<PersistedHistoryItem[]>([]);
   const [persistedAssets, setPersistedAssets] = useState<PersistedAssetItem[]>([]);
@@ -329,6 +332,14 @@ export default function App() {
       setActiveView(firstAvailableView(currentUser));
     }
   }, [activeView, currentUser]);
+
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarCollapsed(false);
+      return;
+    }
+    setSidebarCollapsed(isTablet);
+  }, [isMobile, isTablet]);
 
   async function bootstrap() {
     setBootstrapping(true);
@@ -571,17 +582,26 @@ export default function App() {
   }
 
   return (
-    <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
+    <div className={[sidebarCollapsed && !isMobile ? "app-shell sidebar-collapsed" : "app-shell", isMobile ? "app-shell-mobile" : "", mobileNavOpen ? "mobile-nav-open" : ""].filter(Boolean).join(" ")}>
       <Sidebar
         activeView={activeView}
         onChange={setActiveView}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
         currentUser={currentUser}
+        mobile={isMobile}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
       />
 
       <main className="workspace">
-        <AppHeader title={currentViewTitle} currentUser={currentUser} onLogout={handleLogout} />
+        <AppHeader
+          title={currentViewTitle}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          showNavigationButton={isMobile}
+          onOpenNavigation={() => setMobileNavOpen(true)}
+        />
 
         <section className={activeView === "text-to-image" ? "view-panel active" : "view-panel hidden"}>
           <TextToImagePage onRecordRun={recordWorkspaceRun} pageRuns={textToImageRuns} onDeleteHistory={handleDeleteHistory} />
