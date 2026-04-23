@@ -10,10 +10,11 @@ import { ResultPreviewModal } from "./ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
 import { useModelCatalog } from "../hooks/useModelCatalog";
 import { submitReferenceModuleTransform } from "../services/api";
-import type { GenerationResult } from "../types/fusion";
+import type { GenerationJobProgress, GenerationResult } from "../types/fusion";
 import type { AssetItem } from "../types/mockData";
 import type { PromptTemplate } from "../types/prompts";
 import type { WorkspaceRun } from "../types/workspace";
+import { buildGenerationJobProgress } from "../utils/jobProgress";
 import type { ModuleHistoryEntry } from "../utils/history";
 import type { GenerationProgressPhase } from "./GenerationProgress";
 
@@ -93,6 +94,7 @@ export function ReferenceTransformModulePage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [jobProgress, setJobProgress] = useState<GenerationJobProgress | null>(null);
 
   useEffect(() => {
     if (!models.length) return;
@@ -137,6 +139,7 @@ export function ReferenceTransformModulePage({
     setLoading(true);
     setError(null);
     setProgressState("running");
+    setJobProgress({ percent: 18, label: `${pageTitle}任务排队中...` });
     try {
       const selectedAssetUrls = selectedAssets
         .map((asset) => asset.fileUrl ?? asset.previewUrl ?? asset.storageUrl ?? null)
@@ -159,6 +162,17 @@ export function ReferenceTransformModulePage({
         prompt,
         feature,
         imageSize,
+      }, {
+        onJobUpdate: (job) =>
+          setJobProgress(
+            buildGenerationJobProgress(job, {
+              queued: `${pageTitle}任务排队中...`,
+              running: progressPhases?.[2]?.label ?? `${pageTitle}生成中...`,
+              uploading: `正在整理并保存${pageTitle}结果...`,
+              succeeded: "已完成",
+              failed: submitErrorLabel,
+            }),
+          ),
       });
       if (!response.image_url) {
         throw new Error("生成完成，但没有返回结果图片，请稍后重试。");
@@ -182,13 +196,20 @@ export function ReferenceTransformModulePage({
             : selectedAssetUrls,
         prompt: prompt.trim(),
       });
+      setJobProgress({ percent: 100, label: "已完成" });
       setProgressState("success");
     } catch (submitError) {
-      setProgressState("error");
-      setError(submitError instanceof Error ? submitError.message : submitErrorLabel);
-    } finally {
       setLoading(false);
+      setProgressState("error");
+      setJobProgress({
+        percent: 100,
+        label: submitError instanceof Error ? submitError.message : submitErrorLabel,
+      });
+      setError(submitError instanceof Error ? submitError.message : submitErrorLabel);
+      return;
     }
+
+    setLoading(false);
   }
 
   return (
@@ -230,7 +251,14 @@ export function ReferenceTransformModulePage({
               </label>
             ) : null}
 
-            <GenerationProgress state={progressState} phases={progressPhases} successLabel={successLabel} errorLabel={errorProgressLabel} />
+            <GenerationProgress
+              state={progressState}
+              phases={progressPhases}
+              successLabel={successLabel}
+              errorLabel={errorProgressLabel}
+              progressValue={jobProgress?.percent ?? null}
+              progressLabel={jobProgress?.label ?? null}
+            />
 
             <button className="primary-button align-start" type="button" onClick={handleSubmit} disabled={loading || !selectedModel}>
               {loading ? loadingLabel : submitLabel}

@@ -217,7 +217,13 @@ python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-多人内网测试或准生产环境可以改用多 Web worker：
+多人内网测试或准生产环境，当前这台机器推荐使用 `2` 个 Web worker：
+
+- CPU: Intel i5-12400，`6` 核 `12` 线程
+- 内存: `15GiB`
+- 推荐起步值: `2 web worker + 2 queue worker`
+
+启动命令：
 
 ```bash
 cd /home/chaihe/projects/jinma_jewelry_system/backend
@@ -227,7 +233,7 @@ python -m gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:
 
 ### 3. 启动队列 Worker
 
-队列 Worker 负责执行 AI 生成任务、上传 OSS、写资产和历史记录。它不提供 Web API，也不能处理登录接口。
+队列 Worker 负责执行 AI 生成任务、上传 OSS、写资产和历史记录。它不提供 Web API，也不能处理登录接口。当前这台机器推荐先启动 `2` 个 Queue Worker。
 
 Worker 1：
 
@@ -245,6 +251,14 @@ conda activate jinma_jewelry
 python -m app.worker
 ```
 
+如果后续压测发现：
+
+- Web 接口比较轻松
+- 主要瓶颈在任务排队
+- 上游模型平台也允许更高并发
+
+可以再尝试增加到 `3` 个 Queue Worker，但不建议一开始直接开到 `4+`。
+
 ### 4. 启动前端
 
 ```bash
@@ -256,6 +270,7 @@ npm run dev
 
 - `python -m uvicorn app.main:app ...` 或 `python -m gunicorn ...` 是后端 API 服务，必须启动，否则登录和所有 `/api` 接口都不可用。
 - `python -m app.worker` 是队列消费者，只执行 Redis 里的任务，不能单独作为后端服务使用。
+- 当前这台机器推荐并发配置：`2 web worker + 2 queue worker`。
 - 旧同步生图接口仍保留，可用于回滚和对比。
 - 新任务接口会立即返回 `job_id`，再通过 `GET /api/v1/ai/jobs/{job_id}` 查询 `queued`、`running`、`uploading`、`succeeded`、`failed`。
 - 普通用户默认最多同时 1 个任务，root 默认最多 3 个任务，可通过 `QUEUE_USER_MAX_ACTIVE_JOBS` 和 `QUEUE_ROOT_MAX_ACTIVE_JOBS` 调整。
@@ -285,11 +300,12 @@ DATABASE_URL=mysql+pymysql://root:123456@192.168.10.150:3306/jinma
 
 1. 启动 MySQL，确认 `jinma` 数据库存在。
 2. 启动 Redis，确认监听 `127.0.0.1:6379`。
-3. 启动 Web API 服务：`python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`。
-4. 访问 `http://127.0.0.1:8000/health` 确认后端正常。
-5. 启动 1-2 个队列 Worker：`python -m app.worker`。
-6. 启动前端：`npm run dev`。
-7. 访问 `http://192.168.10.243:5173` 进行局域网调试。
+3. 开发调试时启动 Web API 服务：`python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`。
+4. 内网测试或准生产时建议改用：`python -m gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 2`。
+5. 访问 `http://127.0.0.1:8000/health` 确认后端正常。
+6. 启动 2 个队列 Worker：`python -m app.worker`。
+7. 启动前端：`npm run dev`。
+8. 访问 `http://192.168.10.243:5173` 进行局域网调试。
 
 ## 当前主要功能
 

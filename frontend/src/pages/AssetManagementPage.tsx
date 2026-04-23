@@ -225,10 +225,10 @@ export function AssetManagementPage({
                   ))}
                 </div>
 
-                <div className="inline-action-row">
+                <div className="inline-action-row asset-card-action-row">
                   {canPreview ? (
                     <a
-                      className="secondary-button compact-button"
+                      className="secondary-button compact-button asset-action-button"
                       href={buildDownloadUrl(item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? null, buildDownloadFilename(item.name, item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? null)) ?? item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? undefined}
                       download={buildDownloadFilename(item.name, item.fileUrl ?? item.previewUrl ?? item.storageUrl ?? null)}
                     >
@@ -237,20 +237,20 @@ export function AssetManagementPage({
                   ) : null}
 
                   {item.persistedAssetId && item.scope !== "community" && item.canPublish && onPublishAsset ? (
-                    <button className="secondary-button compact-button" type="button" onClick={() => void handlePublish(item.persistedAssetId!)}>
+                    <button className="secondary-button compact-button asset-action-button" type="button" onClick={() => void handlePublish(item.persistedAssetId!)}>
                       发布到社区
                     </button>
                   ) : null}
 
                   {item.persistedAssetId && item.canUnpublish && onUnpublishAsset ? (
-                    <button className="secondary-button compact-button" type="button" onClick={() => void handleUnpublish(item.persistedAssetId!)}>
+                    <button className="secondary-button compact-button asset-action-button" type="button" onClick={() => void handleUnpublish(item.persistedAssetId!)}>
                       撤回社区
                     </button>
                   ) : null}
 
                   {item.deletable && (item.persistedAssetId || item.persistedHistoryId) ? (
                     <button
-                      className="secondary-button compact-button"
+                      className="secondary-button compact-button asset-action-button"
                       type="button"
                       onClick={() => void handleDelete(item)}
                       disabled={deletingAssetId === (item.persistedAssetId ?? item.persistedHistoryId ?? null)}

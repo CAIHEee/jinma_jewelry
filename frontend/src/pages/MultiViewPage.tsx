@@ -8,9 +8,10 @@ import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
 import { useModelCatalog } from "../hooks/useModelCatalog";
 import { submitMultiViewGeneration } from "../services/api";
-import type { GenerationResult } from "../types/fusion";
+import type { GenerationJobProgress, GenerationResult } from "../types/fusion";
 import type { AssetItem } from "../types/mockData";
 import type { WorkspaceRun } from "../types/workspace";
+import { buildGenerationJobProgress } from "../utils/jobProgress";
 import type { ModuleHistoryEntry } from "../utils/history";
 
 interface MultiViewPageProps {
@@ -30,6 +31,13 @@ const progressPhases = [
   { at: 74, label: "生成多角度视图中..." },
   { at: 95, label: "拼合四宫格结果..." },
 ];
+const jobProgressLabels = {
+  queued: "多视图任务排队中...",
+  running: "生成多角度视图中...",
+  uploading: "正在拼合并保存多视图结果...",
+  succeeded: "已完成",
+  failed: "多视图生成失败",
+};
 
 export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHistory }: MultiViewPageProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
@@ -42,6 +50,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [jobProgress, setJobProgress] = useState<GenerationJobProgress | null>(null);
 
   useEffect(() => {
     if (!models.length) return;
@@ -89,6 +98,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
     setLoading(true);
     setError(null);
     setProgressState("running");
+    setJobProgress({ percent: 18, label: "多视图任务排队中..." });
 
     try {
       const selectedAsset = selectedAssets[0] ?? null;
@@ -105,6 +115,8 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         model: selectedModel.id,
         prompt: defaultPrompt,
         feature: "multi_view",
+      }, {
+        onJobUpdate: (job) => setJobProgress(buildGenerationJobProgress(job, jobProgressLabels)),
       });
       if (!response.image_url) {
         throw new Error("生成完成，但没有返回多视图结果图片，请稍后重试。");
@@ -122,13 +134,20 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
         prompt: defaultPrompt,
       });
+      setJobProgress({ percent: 100, label: "已完成" });
       setProgressState("success");
     } catch (submitError) {
-      setProgressState("error");
-      setError(submitError instanceof Error ? submitError.message : "多视图生成失败");
-    } finally {
       setLoading(false);
+      setProgressState("error");
+      setJobProgress({
+        percent: 100,
+        label: submitError instanceof Error ? submitError.message : "多视图生成失败",
+      });
+      setError(submitError instanceof Error ? submitError.message : "多视图生成失败");
+      return;
     }
+
+    setLoading(false);
   }
 
   return (
@@ -157,7 +176,14 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
               {modelError ? <small>{modelError}</small> : null}
             </label>
 
-            <GenerationProgress state={progressState} phases={progressPhases} successLabel="多视图已完成" errorLabel="多视图生成失败" />
+            <GenerationProgress
+              state={progressState}
+              phases={progressPhases}
+              successLabel="多视图已完成"
+              errorLabel="多视图生成失败"
+              progressValue={jobProgress?.percent ?? null}
+              progressLabel={jobProgress?.label ?? null}
+            />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>
               {loading ? "生成中..." : "生成多视图单图"}

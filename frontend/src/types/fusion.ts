@@ -136,3 +136,8 @@ export interface GenerationJobStatusResponse {
   started_at?: string | null;
   completed_at?: string | null;
 }
+
+export interface GenerationJobProgress {
+  percent: number;
+  label: string;
+}

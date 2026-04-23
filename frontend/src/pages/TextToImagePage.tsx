@@ -9,7 +9,8 @@ import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
 import { useModelCatalog } from "../hooks/useModelCatalog";
 import { submitTextToImage } from "../services/api";
-import type { GenerationResult } from "../types/fusion";
+import type { GenerationJobProgress, GenerationResult } from "../types/fusion";
+import { buildGenerationJobProgress } from "../utils/jobProgress";
 import type { WorkspaceRun } from "../types/workspace";
 import type { ModuleHistoryEntry } from "../utils/history";
 
@@ -26,6 +27,13 @@ const progressPhases = [
   { at: 76, label: "珠宝效果生成中..." },
   { at: 95, label: "回传高清结果..." },
 ];
+const jobProgressLabels = {
+  queued: "文生图任务排队中...",
+  running: "珠宝效果生成中...",
+  uploading: "正在回传并保存结果...",
+  succeeded: "已完成",
+  failed: "文生图生成失败",
+};
 
 export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: TextToImagePageProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_text_to_image);
@@ -39,6 +47,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [jobProgress, setJobProgress] = useState<GenerationJobProgress | null>(null);
 
   useEffect(() => {
     if (!models.length) {
@@ -77,6 +86,7 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
     setLoading(true);
     setError(null);
     setProgressState("running");
+    setJobProgress({ percent: 18, label: "文生图任务排队中..." });
 
     try {
       const response = await submitTextToImage({
@@ -85,6 +95,8 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
         aspect_ratio: aspectRatio,
         size: "1024x1024",
         image_size: imageSize,
+      }, {
+        onJobUpdate: (job) => setJobProgress(buildGenerationJobProgress(job, jobProgressLabels)),
       });
       if (!response.image_url) {
         throw new Error("生成完成，但没有返回结果图片，请稍后重试。");
@@ -101,13 +113,20 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
         imageUrl: response.image_url,
         prompt: prompt.trim(),
       });
+      setJobProgress({ percent: 100, label: "已完成" });
       setProgressState("success");
     } catch (submitError) {
-      setProgressState("error");
-      setError(submitError instanceof Error ? submitError.message : "图片生成失败");
-    } finally {
       setLoading(false);
+      setProgressState("error");
+      setJobProgress({
+        percent: 100,
+        label: submitError instanceof Error ? submitError.message : "文生图生成失败",
+      });
+      setError(submitError instanceof Error ? submitError.message : "文生图生成失败");
+      return;
     }
+
+    setLoading(false);
   }
 
   return (
@@ -156,7 +175,14 @@ export function TextToImagePage({ onRecordRun, pageRuns, onDeleteHistory }: Text
               <AutoResizeTextarea className="prompt-textarea" rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
             </label>
 
-            <GenerationProgress state={progressState} phases={progressPhases} successLabel="图片已完成" errorLabel="文生图失败" />
+            <GenerationProgress
+              state={progressState}
+              phases={progressPhases}
+              successLabel="图片已完成"
+              errorLabel="文生图失败"
+              progressValue={jobProgress?.percent ?? null}
+              progressLabel={jobProgress?.label ?? null}
+            />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>
               {loading ? "生成中..." : "生成图片"}

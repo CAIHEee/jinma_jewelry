@@ -12,6 +12,8 @@ interface GenerationProgressProps {
   phases?: GenerationProgressPhase[];
   successLabel?: string;
   errorLabel?: string;
+  progressValue?: number | null;
+  progressLabel?: string | null;
 }
 
 const defaultPhases: GenerationProgressPhase[] = [
@@ -27,6 +29,8 @@ export function GenerationProgress({
   phases = defaultPhases,
   successLabel = "已完成",
   errorLabel = "生成失败",
+  progressValue = null,
+  progressLabel = null,
 }: GenerationProgressProps) {
   const [progress, setProgress] = useState(8);
   const [visibleState, setVisibleState] = useState<GenerationProgressState>("idle");
@@ -46,7 +50,10 @@ export function GenerationProgress({
 
     if (state === "running") {
       setVisibleState("running");
-      setProgress(8);
+      setProgress(typeof progressValue === "number" ? progressValue : 8);
+      if (typeof progressValue === "number") {
+        return;
+      }
       intervalRef.current = window.setInterval(() => {
         setProgress((current) => {
           if (current < 35) return Math.min(current + 5.5, 35);
@@ -89,7 +96,14 @@ export function GenerationProgress({
         window.clearInterval(intervalRef.current);
       }
     };
-  }, [state]);
+  }, [progressValue, state]);
+
+  useEffect(() => {
+    if (state === "running" && typeof progressValue === "number") {
+      setVisibleState("running");
+      setProgress(progressValue);
+    }
+  }, [progressValue, state]);
 
   useEffect(() => {
     return () => {
@@ -105,8 +119,9 @@ export function GenerationProgress({
   const phaseLabel = useMemo(() => {
     if (visibleState === "success") return successLabel;
     if (visibleState === "error") return errorLabel;
+    if (progressLabel) return progressLabel;
     return phases.find((phase) => progress <= phase.at)?.label ?? phases[phases.length - 1]?.label ?? "处理中...";
-  }, [errorLabel, phases, progress, successLabel, visibleState]);
+  }, [errorLabel, phases, progress, progressLabel, successLabel, visibleState]);
 
   if (visibleState === "idle") return null;
 

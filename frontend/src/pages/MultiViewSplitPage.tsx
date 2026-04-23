@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
 import { FloatingToast } from "../components/FloatingToast";
+import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { splitMultiViewImage, uploadInputAsset } from "../services/api";
-import type { MultiViewSplitItem, MultiViewSplitResponse } from "../types/fusion";
+import type { GenerationJobProgress, MultiViewSplitItem, MultiViewSplitResponse } from "../types/fusion";
 import type { AssetItem } from "../types/mockData";
 import type { WorkspaceRun } from "../types/workspace";
 import { buildDownloadFilename, buildDownloadUrl } from "../utils/download";
+import { buildGenerationJobProgress } from "../utils/jobProgress";
 import type { ModuleHistoryEntry } from "../utils/history";
 
 interface MultiViewSplitPageProps {
@@ -21,6 +23,19 @@ interface MultiViewSplitPageProps {
 type SplitPreviewTab = "source" | "result";
 
 const SPLIT_TOOL_ID = "multi_view_split";
+const progressPhases = [
+  { at: 18, label: "校验四宫格原图..." },
+  { at: 42, label: "提交切图任务..." },
+  { at: 78, label: "裁切并整理各视图..." },
+  { at: 95, label: "保存切图结果..." },
+];
+const jobProgressLabels = {
+  queued: "多视图切图任务排队中...",
+  running: "裁切并整理各视图...",
+  uploading: "正在保存切图结果...",
+  succeeded: "已完成",
+  failed: "多视图切图失败",
+};
 
 const splitViewLabels: Record<string, string> = {
   front: "正视图",
@@ -51,6 +66,8 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
   const [gapXRatio, setGapXRatio] = useState(0);
   const [gapYRatio, setGapYRatio] = useState(0);
   const [activeTab, setActiveTab] = useState<SplitPreviewTab>("source");
+  const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [jobProgress, setJobProgress] = useState<GenerationJobProgress | null>(null);
 
   const uploadedPreviewUrl = useMemo(() => (files[0] ? URL.createObjectURL(files[0]) : null), [files]);
 
@@ -113,6 +130,8 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
     }
     setLoading(true);
     setError(null);
+    setProgressState("running");
+    setJobProgress({ percent: 18, label: "多视图切图任务排队中..." });
 
     try {
       const sourceImageUrl = await resolveSourceImageUrl();
@@ -129,6 +148,8 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
         split_y_ratio: splitYRatio,
         gap_x_ratio: gapXRatio,
         gap_y_ratio: gapYRatio,
+      }, {
+        onJobUpdate: (job) => setJobProgress(buildGenerationJobProgress(job, jobProgressLabels)),
       });
       if (!response.items.length || !response.items.some((item) => item.image_url)) {
         throw new Error("切图完成，但没有返回有效结果，请调整参数后重试。");
@@ -137,6 +158,8 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
       setSplitResult(response);
       setSelectedHistoryId(null);
       setActiveTab("result");
+      setJobProgress({ percent: 100, label: "已完成" });
+      setProgressState("success");
       onRecordRun?.({
         kind: "multi_view_split",
         title: "多视图切图",
@@ -157,10 +180,17 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
         prompt: "Split four-grid multi-view image into separate view assets.",
       });
     } catch (splitError) {
-      setError(splitError instanceof Error ? splitError.message : "多视图切图失败。");
-    } finally {
       setLoading(false);
+      setProgressState("error");
+      setJobProgress({
+        percent: 100,
+        label: splitError instanceof Error ? splitError.message : "多视图切图失败。",
+      });
+      setError(splitError instanceof Error ? splitError.message : "多视图切图失败。");
+      return;
     }
+
+    setLoading(false);
   }
 
   function handlePreviewSource() {
@@ -211,6 +241,15 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
                 </div>
               </div>
             </details>
+
+            <GenerationProgress
+              state={progressState}
+              phases={progressPhases}
+              successLabel="切图已完成"
+              errorLabel="切图失败"
+              progressValue={jobProgress?.percent ?? null}
+              progressLabel={jobProgress?.label ?? null}
+            />
 
             <button className="primary-button align-start" type="button" onClick={handleSplit} disabled={loading}>
               {loading ? "切图中..." : "开始切图"}

@@ -1864,6 +1864,20 @@ select {
   text-decoration: none;
 }
 
+.asset-card-action-row {
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+}
+
+.asset-card-action-row .asset-action-button {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1;
+}
+
 .align-start {
   justify-self: start;
 }

@@ -8,9 +8,10 @@ import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
 import { useModelCatalog } from "../hooks/useModelCatalog";
 import { submitReferenceImageTransform } from "../services/api";
-import type { GenerationResult } from "../types/fusion";
+import type { GenerationJobProgress, GenerationResult } from "../types/fusion";
 import type { AssetItem } from "../types/mockData";
 import type { WorkspaceRun } from "../types/workspace";
+import { buildGenerationJobProgress } from "../utils/jobProgress";
 import type { ModuleHistoryEntry } from "../utils/history";
 
 const templates = getPromptTemplatesByModule("grayscale-relief");
@@ -23,6 +24,13 @@ const progressPhases = [
   { at: 76, label: "生成灰阶泥模质感..." },
   { at: 95, label: "整理灰度结果..." },
 ];
+const jobProgressLabels = {
+  queued: "灰度转换任务排队中...",
+  running: "生成灰阶泥模质感...",
+  uploading: "正在整理并保存灰度结果...",
+  succeeded: "已完成",
+  failed: "灰度转换失败",
+};
 
 interface GrayscaleReliefPageProps {
   assetItems: AssetItem[];
@@ -42,6 +50,7 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [jobProgress, setJobProgress] = useState<GenerationJobProgress | null>(null);
 
   useEffect(() => {
     if (!models.length) {
@@ -91,6 +100,7 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
     setLoading(true);
     setError(null);
     setProgressState("running");
+    setJobProgress({ percent: 18, label: "灰度转换任务排队中..." });
 
     try {
       const selectedAsset = selectedAssets[0] ?? null;
@@ -107,6 +117,8 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
         model: selectedModel.id,
         prompt: defaultPrompt,
         feature: "grayscale_relief",
+      }, {
+        onJobUpdate: (job) => setJobProgress(buildGenerationJobProgress(job, jobProgressLabels)),
       });
       if (!response.image_url) {
         throw new Error("生成完成，但没有返回灰度结果图片，请稍后重试。");
@@ -124,13 +136,20 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
         prompt: defaultPrompt,
       });
+      setJobProgress({ percent: 100, label: "已完成" });
       setProgressState("success");
     } catch (submitError) {
-      setProgressState("error");
-      setError(submitError instanceof Error ? submitError.message : "转灰度图失败");
-    } finally {
       setLoading(false);
+      setProgressState("error");
+      setJobProgress({
+        percent: 100,
+        label: submitError instanceof Error ? submitError.message : "转灰度图失败",
+      });
+      setError(submitError instanceof Error ? submitError.message : "转灰度图失败");
+      return;
     }
+
+    setLoading(false);
   }
 
   return (
@@ -159,7 +178,14 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
               {modelError ? <small>{modelError}</small> : null}
             </label>
 
-            <GenerationProgress state={progressState} phases={progressPhases} successLabel="灰度图已完成" errorLabel="灰度转换失败" />
+            <GenerationProgress
+              state={progressState}
+              phases={progressPhases}
+              successLabel="灰度图已完成"
+              errorLabel="灰度转换失败"
+              progressValue={jobProgress?.percent ?? null}
+              progressLabel={jobProgress?.label ?? null}
+            />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>
               {loading ? "生成中..." : "生成灰度图"}

@@ -10,9 +10,10 @@ import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
 import { useModelCatalog } from "../hooks/useModelCatalog";
 import { submitFusionJob } from "../services/api";
-import type { FusionMode, FusionResult } from "../types/fusion";
+import type { FusionMode, FusionResult, GenerationJobProgress } from "../types/fusion";
 import type { AssetItem } from "../types/mockData";
 import type { WorkspaceRun } from "../types/workspace";
+import { buildGenerationJobProgress } from "../utils/jobProgress";
 import type { ModuleHistoryEntry } from "../utils/history";
 
 const modes: Array<{ value: FusionMode; label: string; description: string }> = [
@@ -29,6 +30,13 @@ const progressPhases = [
   { at: 72, label: "融合材质与结构中..." },
   { at: 95, label: "整理融合结果..." },
 ];
+const jobProgressLabels = {
+  queued: "多图融合任务排队中...",
+  running: "融合材质与结构中...",
+  uploading: "正在整理并保存融合结果...",
+  succeeded: "已完成",
+  failed: "多图融合失败",
+};
 
 interface FusionStudioProps {
   onRecordRun: (run: Omit<WorkspaceRun, "id" | "createdAt">) => void;
@@ -52,6 +60,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progressState, setProgressState] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [jobProgress, setJobProgress] = useState<GenerationJobProgress | null>(null);
 
   useEffect(() => {
     if (!models.length) {
@@ -126,6 +135,7 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
 
     setIsSubmitting(true);
     setProgressState("running");
+    setJobProgress({ percent: 18, label: "多图融合任务排队中..." });
 
     try {
       const sourceImageUrls = selectedAssets
@@ -144,6 +154,8 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
         mode,
         primaryImageIndex,
         strength,
+      }, {
+        onJobUpdate: (job) => setJobProgress(buildGenerationJobProgress(job, jobProgressLabels)),
       });
       if (!response.image_url) {
         throw new Error("融合完成，但没有返回结果图片，请稍后重试。");
@@ -163,13 +175,20 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
         primaryImageIndex,
         prompt: prompt.trim(),
       });
+      setJobProgress({ percent: 100, label: "已完成" });
       setProgressState("success");
     } catch (submitError) {
-      setProgressState("error");
-      setError(submitError instanceof Error ? submitError.message : "融合任务提交失败");
-    } finally {
       setIsSubmitting(false);
+      setProgressState("error");
+      setJobProgress({
+        percent: 100,
+        label: submitError instanceof Error ? submitError.message : "多图融合失败",
+      });
+      setError(submitError instanceof Error ? submitError.message : "多图融合失败");
+      return;
     }
+
+    setIsSubmitting(false);
   }
 
   return (
@@ -263,7 +282,14 @@ export function FusionStudio({ onRecordRun, assetItems, pageRuns, onDeleteHistor
               </div>
             </details>
 
-            <GenerationProgress state={progressState} phases={progressPhases} successLabel="融合已完成" errorLabel="融合失败" />
+            <GenerationProgress
+              state={progressState}
+              phases={progressPhases}
+              successLabel="融合已完成"
+              errorLabel="融合失败"
+              progressValue={jobProgress?.percent ?? null}
+              progressLabel={jobProgress?.label ?? null}
+            />
 
             <button className="primary-button align-start" type="submit" disabled={isSubmitting || !selectedModel}>
               {isSubmitting ? "提交中..." : "提交融合任务"}
