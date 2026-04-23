@@ -298,6 +298,7 @@ sudo systemctl restart nginx
 当前 Docker 方案的核心目录和文件：
 
 - [docker-compose.yml](/home/chaihe/projects/jinma_jewelry_system/docker-compose.yml)
+- [docker-compose.build.yml](/home/chaihe/projects/jinma_jewelry_system/docker-compose.build.yml)
 - [backend.Dockerfile](/home/chaihe/projects/jinma_jewelry_system/deploy/docker/backend.Dockerfile)
 - [.env.docker.example](/home/chaihe/projects/jinma_jewelry_system/deploy/docker/.env.docker.example)
 - [wait_for_tcp.py](/home/chaihe/projects/jinma_jewelry_system/deploy/docker/wait_for_tcp.py)
@@ -320,15 +321,18 @@ cp deploy/docker/.env.docker.example .env.docker
 
 3. 编辑 `.env.docker`，至少修改这些值：
 
+- `BACKEND_IMAGE`
+- `NGINX_IMAGE`
 - `MYSQL_ROOT_PASSWORD`
 - `AUTH_SECRET_KEY`
 - `ROOT_DEFAULT_PASSWORD`
 - `APIYI_API_KEY` 或 `TTAPI_API_KEY`
 
-4. 启动容器：
+4. 从 Docker Hub 拉取并启动容器：
 
 ```bash
-docker compose --env-file .env.docker up -d --build
+docker compose --env-file .env.docker pull
+docker compose --env-file .env.docker up -d
 ```
 
 5. 查看状态：
@@ -382,12 +386,97 @@ http://<服务器IP>
 
 ### 后续升级
 
-在目标机器上更新代码后执行：
+在目标机器上更新镜像后执行：
 
 ```bash
-git pull
-docker compose --env-file .env.docker up -d --build
+docker compose --env-file .env.docker pull
+docker compose --env-file .env.docker up -d
 ```
+
+### 本机构建并推送 Docker Hub
+
+如果你要发布新版本到 Docker Hub，先在本机构建镜像：
+
+```bash
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.build.yml build
+```
+
+登录 Docker Hub：
+
+```bash
+docker login
+```
+
+推送镜像：
+
+```bash
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.build.yml push backend nginx
+```
+
+说明：
+
+- `worker` 和 `backend` 共用同一个后端镜像，所以只需要推一次 `BACKEND_IMAGE`
+- 新机器部署时只需 `pull + up`，不再本地构建
+
+### U 盘离线部署包
+
+如果你想把整套程序放到 U 盘，新机器除了安装 Docker 之外什么都不下载，可以直接生成离线部署包。
+
+生成离线包：
+
+```bash
+chmod +x deploy/docker/prepare_offline_bundle.sh
+deploy/docker/prepare_offline_bundle.sh
+```
+
+如果你想自定义镜像名：
+
+```bash
+BACKEND_IMAGE=jinma-backend:offline \
+NGINX_IMAGE=jinma-nginx:offline \
+deploy/docker/prepare_offline_bundle.sh
+```
+
+脚本会在 `dist/offline_bundle` 下生成：
+
+- `jinma-images.tar`
+- `.env.docker`
+- `docker-compose.yml`
+- `start_offline_stack.sh`
+- `stop_offline_stack.sh`
+
+把整个 `dist/offline_bundle` 目录拷到 U 盘即可。
+
+新机器上使用：
+
+```bash
+cd offline_bundle
+chmod +x start_offline_stack.sh
+./start_offline_stack.sh
+```
+
+停止：
+
+```bash
+./stop_offline_stack.sh
+```
+
+这套离线包默认包含：
+
+- 你的后端镜像
+- 你的 nginx 前端镜像
+- `mysql:8.4`
+- `redis:7-alpine`
+
+所以新机器不需要再联网拉镜像。
+
+离线包里的 Compose 项目名固定为 `jinma_jewelry_system`。这样后续即使你把目录命名为 `offline_bundle_v1`、`offline_bundle_v2`，也会继续复用同一套 Docker volume：
+
+- `jinma_jewelry_system_mysql_data`
+- `jinma_jewelry_system_backend_data`
+- `jinma_jewelry_system_redis_data`
+
+更新时不要执行 `docker compose down -v`，否则会删除这些 volume，数据库和本地图片都会丢。
 
 ### 迁移到另一台机器
 

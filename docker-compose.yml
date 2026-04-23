@@ -1,3 +1,5 @@
+name: jinma_jewelry_system
+
 services:
   mysql:
     image: mysql:8.4
@@ -31,9 +33,7 @@ services:
       retries: 10
 
   backend:
-    build:
-      context: .
-      dockerfile: deploy/docker/backend.Dockerfile
+    image: ${BACKEND_IMAGE}
     restart: unless-stopped
     environment:
       APP_ENV: production
@@ -100,9 +100,7 @@ services:
       retries: 10
 
   worker:
-    build:
-      context: .
-      dockerfile: deploy/docker/backend.Dockerfile
+    image: ${BACKEND_IMAGE}
     restart: unless-stopped
     environment:
       APP_ENV: production
@@ -163,9 +161,7 @@ services:
       - backend_data:/app/backend/data
 
   nginx:
-    build:
-      context: .
-      dockerfile: deploy/nginx/Dockerfile
+    image: ${NGINX_IMAGE}
     restart: unless-stopped
     depends_on:
       backend:

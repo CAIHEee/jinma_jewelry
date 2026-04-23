@@ -1,0 +1,19 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/docker/backend.Dockerfile
+    image: ${BACKEND_IMAGE}
+
+  worker:
+    build:
+      context: .
+      dockerfile: deploy/docker/backend.Dockerfile
+    image: ${BACKEND_IMAGE}
+
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/nginx/Dockerfile
+    image: ${NGINX_IMAGE}
+
