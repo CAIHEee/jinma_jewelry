@@ -52,6 +52,20 @@ def get_current_user(
         return user
 
 
+def get_current_user_id(
+    authorization: str | None = Header(default=None),
+    cookie_token: str | None = Cookie(default=None, alias=settings.auth_cookie_name),
+) -> str:
+    token = _extract_token(authorization, cookie_token)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
+
+    user_id = decode_access_token(token)
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token.")
+    return user_id
+
+
 def require_root(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "root":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Root access required.")

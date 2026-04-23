@@ -12,11 +12,13 @@ from app.models.user import User
 from app.models.user_module_permission import UserModulePermission
 from app.schemas.admin import AdminUser, AdminUserCreate, AdminUserListResponse, AdminUserUpdate, UserPermissionUpdateRequest
 from app.schemas.auth import CurrentUserResponse, ModulePermissionItem
+from app.services.cache_service import get_cache_service
 
 
 class UserService:
     def __init__(self) -> None:
         init_db()
+        self.cache_service = get_cache_service()
 
     def to_permission_items(self, user: User) -> list[ModulePermissionItem]:
         current = {permission.module_key: bool(permission.is_enabled) for permission in user.module_permissions}
@@ -91,6 +93,7 @@ class UserService:
             session.commit()
             session.refresh(user)
             user.module_permissions
+            self.cache_service.delete_auth_me(user.id)
             return self.to_admin_user(user)
 
     def update_user(self, user_id: str, payload: AdminUserUpdate) -> AdminUser:
@@ -117,6 +120,7 @@ class UserService:
             session.commit()
             session.refresh(user)
             user.module_permissions
+            self.cache_service.delete_auth_me(user.id)
             return self.to_admin_user(user)
 
     def soft_delete_user(self, user_id: str) -> None:
@@ -129,6 +133,7 @@ class UserService:
             user.is_disabled = 1
             user.deleted_at = datetime.now(timezone.utc)
             session.commit()
+            self.cache_service.delete_auth_me(user.id)
 
     def reset_password(self, user_id: str, password: str) -> None:
         with SessionLocal() as session:
@@ -137,6 +142,7 @@ class UserService:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
             user.password_hash = hash_password(password)
             session.commit()
+            self.cache_service.delete_auth_me(user.id)
 
     def update_permissions(self, user_id: str, payload: UserPermissionUpdateRequest) -> list[ModulePermissionItem]:
         with SessionLocal() as session:
@@ -166,4 +172,5 @@ class UserService:
             session.commit()
             session.refresh(user)
             user.module_permissions
+            self.cache_service.delete_auth_me(user.id)
             return self.to_permission_items(user)

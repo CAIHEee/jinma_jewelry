@@ -18,10 +18,12 @@ from app.schemas.ai import (
     TextToImageRequest,
 )
 from app.services.ai_service import AIService
+from app.services.cache_service import get_cache_service
 
 
 router = APIRouter()
 service = AIService()
+cache_service = get_cache_service()
 
 
 def _parse_string_array_json(value: str | None, *, field_name: str) -> list[str]:
@@ -43,7 +45,17 @@ def list_features() -> GenerationFeatureCatalog:
 
 @router.get("/models", response_model=ModelCatalogResponse)
 def list_models() -> ModelCatalogResponse:
-    return service.get_model_catalog()
+    cached = cache_service.get_json(cache_service.model_catalog_key())
+    if cached is not None:
+        return ModelCatalogResponse.model_validate(cached)
+
+    response = service.get_model_catalog()
+    cache_service.set_json(
+        cache_service.model_catalog_key(),
+        response.model_dump(mode="json"),
+        ttl_seconds=get_settings().cache_model_catalog_ttl_seconds,
+    )
+    return response
 
 
 @router.post("/text-to-image", response_model=GenerationResult)

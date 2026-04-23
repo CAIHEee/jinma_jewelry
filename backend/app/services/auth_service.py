@@ -10,6 +10,7 @@ from app.db.session import SessionLocal, init_db
 from app.models.user import User
 from app.models.user_module_permission import UserModulePermission
 from app.schemas.auth import CurrentUserResponse, LoginResponse, RegisterRequest
+from app.services.cache_service import get_cache_service
 from app.services.user_service import UserService
 
 
@@ -17,6 +18,7 @@ class AuthService:
     def __init__(self) -> None:
         init_db()
         self.user_service = UserService()
+        self.cache_service = get_cache_service()
 
     def login(self, username: str, password: str) -> LoginResponse:
         with SessionLocal() as session:
@@ -77,3 +79,15 @@ class AuthService:
 
     def current_user(self, user: User) -> CurrentUserResponse:
         return self.user_service.to_current_user(user)
+
+    def current_user_by_id(self, user_id: str) -> CurrentUserResponse:
+        with SessionLocal() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found.")
+            if user.deleted_at is not None:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is deleted.")
+            if user.is_disabled:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is disabled.")
+            user.module_permissions
+            return self.user_service.to_current_user(user)

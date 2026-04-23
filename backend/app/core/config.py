@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     queue_result_ttl_seconds: int = Field(default=3600, alias="QUEUE_RESULT_TTL_SECONDS")
     queue_user_max_active_jobs: int = Field(default=1, alias="QUEUE_USER_MAX_ACTIVE_JOBS")
     queue_root_max_active_jobs: int = Field(default=3, alias="QUEUE_ROOT_MAX_ACTIVE_JOBS")
+    cache_job_status_ttl_seconds: int = Field(default=21600, alias="CACHE_JOB_STATUS_TTL_SECONDS")
+    cache_job_dedupe_ttl_seconds: int = Field(default=180, alias="CACHE_JOB_DEDUPE_TTL_SECONDS")
+    cache_model_catalog_ttl_seconds: int = Field(default=300, alias="CACHE_MODEL_CATALOG_TTL_SECONDS")
+    cache_auth_me_ttl_seconds: int = Field(default=60, alias="CACHE_AUTH_ME_TTL_SECONDS")
 
     @property
     def allowed_origins(self) -> list[str]:

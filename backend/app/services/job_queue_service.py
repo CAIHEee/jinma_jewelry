@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 from fastapi import HTTPException, status
 import httpx
@@ -19,6 +21,7 @@ from app.models.user import User
 from app.schemas.ai import FusionRequestMetadata, MultiViewSplitRequest, ReferenceImageRequestMetadata, TextToImageRequest
 from app.schemas.jobs import GenerationJobAccepted, GenerationJobStatusResponse
 from app.services.ai_service import AIService
+from app.services.cache_service import get_cache_service
 
 
 ACTIVE_JOB_STATUSES = ("queued", "running", "uploading")
@@ -27,6 +30,7 @@ ACTIVE_JOB_STATUSES = ("queued", "running", "uploading")
 class JobQueueService:
     def __init__(self) -> None:
         self.settings = get_settings()
+        self.cache_service = get_cache_service()
 
     def ensure_can_enqueue(self, *, current_user: User) -> None:
         limit = self.settings.queue_root_max_active_jobs if current_user.role == "root" else self.settings.queue_user_max_active_jobs
@@ -52,14 +56,47 @@ class JobQueueService:
         request_payload: dict[str, Any],
     ) -> GenerationJobAccepted:
         self.ensure_can_enqueue(current_user=current_user)
+        request_hash = self._build_request_hash(
+            current_user_id=current_user.id,
+            feature_key=feature_key,
+            model=model,
+            prompt=prompt,
+            request_payload=request_payload,
+        )
+        existing_job_id = self._find_active_dedupe_job_id(current_user_id=current_user.id, request_hash=request_hash)
+        if existing_job_id:
+            return GenerationJobAccepted(
+                job_id=existing_job_id,
+                status="queued",
+                feature=feature_key,
+                message="相同任务已在队列中。",
+            )
+
         queue = self._build_queue()
         now = datetime.now(timezone.utc)
+        job_id = str(uuid4())
+        dedupe_key = self.cache_service.job_dedupe_key(current_user.id, request_hash)
+        dedupe_reserved = self.cache_service.set_if_absent(
+            dedupe_key,
+            {"job_id": job_id},
+            ttl_seconds=self.settings.cache_job_dedupe_ttl_seconds,
+        )
+        if not dedupe_reserved:
+            existing_job_id = self._find_active_dedupe_job_id(current_user_id=current_user.id, request_hash=request_hash)
+            if existing_job_id:
+                return GenerationJobAccepted(
+                    job_id=existing_job_id,
+                    status="queued",
+                    feature=feature_key,
+                    message="相同任务已在队列中。",
+                )
 
         with SessionLocal() as session:
             job = GenerationJob(
+                id=job_id,
                 user_id=current_user.id,
                 queue_name=self.settings.queue_name,
-                rq_job_id="",
+                rq_job_id=job_id,
                 feature_key=feature_key,
                 model=model,
                 prompt=prompt,
@@ -69,10 +106,15 @@ class JobQueueService:
                 updated_at=now,
             )
             session.add(job)
-            session.flush()
-            job.rq_job_id = job.id
             session.commit()
-            job_id = job.id
+            session.refresh(job)
+
+        self._cache_job_status(job)
+        self.cache_service.set_json(
+            dedupe_key,
+            {"job_id": job_id},
+            ttl_seconds=self.settings.cache_job_dedupe_ttl_seconds,
+        )
 
         try:
             queue.enqueue(
@@ -84,6 +126,7 @@ class JobQueueService:
             )
         except Exception as exc:  # noqa: BLE001
             self.mark_failed(job_id, f"任务入队失败: {exc}")
+            self.cache_service.delete(dedupe_key)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"任务队列不可用: {exc}",
@@ -98,11 +141,18 @@ class JobQueueService:
 
     def get_job(self, *, job_id: str, current_user: User) -> GenerationJobStatusResponse:
         with SessionLocal() as session:
-            job = session.get(GenerationJob, job_id)
-            if job is None:
+            owner_user_id = session.scalar(select(GenerationJob.user_id).where(GenerationJob.id == job_id))
+            if owner_user_id is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在。")
-            if current_user.role != "root" and job.user_id != current_user.id:
+            if current_user.role != "root" and owner_user_id != current_user.id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该任务。")
+
+        cached = self.cache_service.get_json(self.cache_service.job_status_key(job_id))
+        if cached is not None:
+            try:
+                return GenerationJobStatusResponse.model_validate(cached)
+            except Exception:  # noqa: BLE001
+                pass
 
         self._reconcile_with_rq(job_id)
 
@@ -111,7 +161,13 @@ class JobQueueService:
             if job is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在。")
             session.expunge(job)
-        return self._to_schema(job)
+        response = self._to_schema(job)
+        self.cache_service.set_json(
+            self.cache_service.job_status_key(job_id),
+            response.model_dump(mode="json"),
+            ttl_seconds=self.settings.cache_job_status_ttl_seconds,
+        )
+        return response
 
     def mark_running(self, job_id: str) -> None:
         self._update_job(job_id, status="running", started_at=datetime.now(timezone.utc), error_message=None)
@@ -255,6 +311,9 @@ class JobQueueService:
                 setattr(job, key, value)
             job.updated_at = datetime.now(timezone.utc)
             session.commit()
+            session.refresh(job)
+            session.expunge(job)
+        self._cache_job_status(job)
 
     def _build_queue(self) -> Queue:
         try:
@@ -295,6 +354,56 @@ class JobQueueService:
                 error_message="任务已结束，但数据库结果状态未正确落库。",
                 completed_at=datetime.now(timezone.utc),
             )
+
+    def _cache_job_status(self, job: GenerationJob) -> None:
+        response = self._to_schema(job)
+        self.cache_service.set_json(
+            self.cache_service.job_status_key(job.id),
+            response.model_dump(mode="json"),
+            ttl_seconds=self.settings.cache_job_status_ttl_seconds,
+        )
+
+    def _find_active_dedupe_job_id(self, *, current_user_id: str, request_hash: str) -> str | None:
+        payload = self.cache_service.get_json(self.cache_service.job_dedupe_key(current_user_id, request_hash))
+        if not isinstance(payload, dict):
+            return None
+
+        job_id = payload.get("job_id")
+        if not isinstance(job_id, str) or not job_id:
+            return None
+
+        cached_job = self.cache_service.get_json(self.cache_service.job_status_key(job_id))
+        if isinstance(cached_job, dict):
+            status_value = cached_job.get("status")
+            if status_value in ACTIVE_JOB_STATUSES:
+                return job_id
+
+        with SessionLocal() as session:
+            job_status = session.scalar(select(GenerationJob.status).where(GenerationJob.id == job_id))
+        if job_status in ACTIVE_JOB_STATUSES:
+            return job_id
+
+        self.cache_service.delete(self.cache_service.job_dedupe_key(current_user_id, request_hash))
+        return None
+
+    def _build_request_hash(
+        self,
+        *,
+        current_user_id: str,
+        feature_key: str,
+        model: str | None,
+        prompt: str | None,
+        request_payload: dict[str, Any],
+    ) -> str:
+        payload = {
+            "user_id": current_user_id,
+            "feature_key": feature_key,
+            "model": model,
+            "prompt": prompt,
+            "request_payload": request_payload,
+        }
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     def _dump_json(self, payload: dict[str, Any] | None) -> str | None:
         if payload is None:
