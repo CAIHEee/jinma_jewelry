@@ -132,14 +132,7 @@ async function waitForGenerationJobResult<T>(
   fallbackError: string,
   options?: JobWaitOptions,
 ): Promise<T> {
-  const pollMs = options?.pollMs ?? 1000;
-  const timeoutMs = options?.timeoutMs ?? 10 * 60 * 1000;
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    const job = await fetchGenerationJob(jobId);
-    options?.onJobUpdate?.(job, buildGenerationJobProgress(job));
-
+  async function resolveTerminalJob(job: GenerationJobStatusResponse): Promise<T> {
     if (job.status === "failed") {
       throw new Error(job.error_message || job.message || fallbackError);
     }
@@ -151,7 +144,28 @@ async function waitForGenerationJobResult<T>(
       throw new Error("任务已完成，但没有返回有效结果。");
     }
 
+    throw new Error("任务尚未完成。");
+  }
+
+  const pollMs = options?.pollMs ?? 1000;
+  const timeoutMs = options?.timeoutMs ?? 10 * 60 * 1000;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const job = await fetchGenerationJob(jobId);
+    options?.onJobUpdate?.(job, buildGenerationJobProgress(job));
+
+    if (job.status === "failed" || job.status === "succeeded") {
+      return resolveTerminalJob(job);
+    }
+
     await new Promise((resolve) => window.setTimeout(resolve, pollMs));
+  }
+
+  const finalJob = await fetchGenerationJob(jobId);
+  options?.onJobUpdate?.(finalJob, buildGenerationJobProgress(finalJob));
+  if (finalJob.status === "failed" || finalJob.status === "succeeded") {
+    return resolveTerminalJob(finalJob);
   }
 
   throw new Error("任务处理超时，前端已停止轮询。请稍后到历史记录查看结果，或重新提交。");

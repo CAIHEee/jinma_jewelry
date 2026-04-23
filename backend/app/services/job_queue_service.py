@@ -150,7 +150,9 @@ class JobQueueService:
         cached = self.cache_service.get_json(self.cache_service.job_status_key(job_id))
         if cached is not None:
             try:
-                return GenerationJobStatusResponse.model_validate(cached)
+                cached_response = GenerationJobStatusResponse.model_validate(cached)
+                if cached_response.status in {"succeeded", "failed"}:
+                    return cached_response
             except Exception:  # noqa: BLE001
                 pass
 
