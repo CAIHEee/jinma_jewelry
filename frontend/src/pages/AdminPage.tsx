@@ -302,11 +302,15 @@ export function AdminPage({
             <p>{systemStatus ? "启动时与管理页刷新时会验证数据库连通性。" : "加载中..."}</p>
           </article>
           <article className="admin-status-card">
-            <span className={systemStatus?.oss_configured ? "status-pill online" : "status-pill warning"}>
-              {systemStatus?.oss_configured ? "OSS 已配置" : "OSS 未配置"}
+            <span className={systemStatus?.storage_mode === "local_disk" ? "status-pill online" : "status-pill warning"}>
+              {systemStatus?.storage_mode === "local_disk" ? "本地存储" : "存储异常"}
             </span>
-            <strong>对象存储</strong>
-            <p>{systemStatus ? `${systemStatus.oss_provider}${systemStatus.oss_bucket ? ` / ${systemStatus.oss_bucket}` : ""}` : "加载中..."}</p>
+            <strong>文件存储</strong>
+            <p>
+              {systemStatus
+                ? `${systemStatus.storage_path}${systemStatus.oss_compat_enabled ? " / 兼容旧 OSS 记录" : ""}`
+                : "加载中..."}
+            </p>
           </article>
           <article className="admin-status-card">
             <span className="status-pill idle">{systemStatus?.environment ?? "未知环境"}</span>

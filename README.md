@@ -228,6 +228,181 @@ POST /api/v1/ai/jobs/split-multi-view
 
 当前阶段不需要额外引入 Nginx 做负载均衡。单机内网部署时，需要分别启动 Redis、Web API 服务、队列 Worker。
 
+如果只是想把前端静态站点和 `/api` 收口到同一个访问入口，现在已经补了一版基础 `nginx` 配置，位置在：
+
+- [jinma.conf](/home/chaihe/projects/jinma_jewelry_system/deploy/nginx/jinma.conf)
+- [jinma.docker.conf](/home/chaihe/projects/jinma_jewelry_system/deploy/nginx/jinma.docker.conf)
+- [deploy/nginx/Dockerfile](/home/chaihe/projects/jinma_jewelry_system/deploy/nginx/Dockerfile)
+- [deploy/nginx/README.md](/home/chaihe/projects/jinma_jewelry_system/deploy/nginx/README.md)
+
+这版 `nginx` 当前只做两件事：
+
+- 托管前端 `frontend/dist`
+- 反向代理 `/api` 和 `/health` 到 `127.0.0.1:8000`
+
+### 本机安装与启动 nginx
+
+如果本机还没有安装 `nginx`，先执行：
+
+```bash
+sudo apt update
+sudo apt install -y nginx
+```
+
+安装后，把项目里的配置拷贝到系统目录：
+
+```bash
+sudo cp /home/chaihe/projects/jinma_jewelry_system/deploy/nginx/jinma.conf /etc/nginx/conf.d/jinma.conf
+```
+
+校验配置是否正确：
+
+```bash
+sudo nginx -t
+```
+
+启动 nginx：
+
+```bash
+sudo systemctl enable nginx
+sudo systemctl start nginx
+```
+
+如果 nginx 已经启动过，修改配置后用下面命令重载：
+
+```bash
+sudo systemctl reload nginx
+```
+
+查看运行状态：
+
+```bash
+systemctl status nginx
+```
+
+如果只是临时重启服务，也可以用：
+
+```bash
+sudo systemctl restart nginx
+```
+
+## Docker 单机部署
+
+当前推荐的部署方式是：
+
+- 单机服务器
+- 局域网访问
+- 图片默认走本地磁盘存储
+- MySQL 只存 `storage_url` 这类逻辑地址，不存图片二进制
+
+当前 Docker 方案的核心目录和文件：
+
+- [docker-compose.yml](/home/chaihe/projects/jinma_jewelry_system/docker-compose.yml)
+- [backend.Dockerfile](/home/chaihe/projects/jinma_jewelry_system/deploy/docker/backend.Dockerfile)
+- [.env.docker.example](/home/chaihe/projects/jinma_jewelry_system/deploy/docker/.env.docker.example)
+- [wait_for_tcp.py](/home/chaihe/projects/jinma_jewelry_system/deploy/docker/wait_for_tcp.py)
+
+### 图片与数据如何存
+
+- MySQL 中只存图片逻辑地址，例如 `local://generated/upscale/2026/04/xxx.png`
+- 真实图片文件写在后端本地目录，即容器内的 `/app/backend/data/local_assets`
+- 前端统一通过 `/api/v1/assets/content?storage_url=local://...` 读取图片
+- `backend` 和 `worker` 共用同一个 `backend_data` 卷，所以 worker 生成的图片，backend 可以立即读取
+
+### 第一次部署
+
+1. 安装 Docker 和 Docker Compose 插件
+2. 在仓库根目录复制环境变量模板：
+
+```bash
+cp deploy/docker/.env.docker.example .env.docker
+```
+
+3. 编辑 `.env.docker`，至少修改这些值：
+
+- `MYSQL_ROOT_PASSWORD`
+- `AUTH_SECRET_KEY`
+- `ROOT_DEFAULT_PASSWORD`
+- `APIYI_API_KEY` 或 `TTAPI_API_KEY`
+
+4. 启动容器：
+
+```bash
+docker compose --env-file .env.docker up -d --build
+```
+
+5. 查看状态：
+
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f backend
+docker compose --env-file .env.docker logs -f worker
+```
+
+### 验证是否启动成功
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:${NGINX_PORT:-80}/health
+```
+
+浏览器访问：
+
+```text
+http://<服务器IP>:<NGINX_PORT>
+```
+
+如果 `NGINX_PORT=80`，就直接访问：
+
+```text
+http://<服务器IP>
+```
+
+### 容器和卷说明
+
+这套 Compose 默认会启动：
+
+- `mysql`
+- `redis`
+- `backend`
+- `worker`
+- `nginx`
+
+其中持久化卷至少有：
+
+- `mysql_data`
+- `backend_data`
+- `redis_data`
+
+最重要的是：
+
+- `backend_data` 保存本地图片和后端本地数据目录
+- 只要这个卷没删，重建 `backend` / `worker` 容器后，图片不会丢
+
+### 后续升级
+
+在目标机器上更新代码后执行：
+
+```bash
+git pull
+docker compose --env-file .env.docker up -d --build
+```
+
+### 迁移到另一台机器
+
+迁移时必须一起迁这两部分：
+
+- MySQL 数据
+- `backend_data` 卷中的本地图片
+
+常见做法：
+
+- 数据库用 `mysqldump`
+- 图片数据直接打包卷对应目录或导出 Docker volume
+
+恢复后只要数据库中的 `local://...` 不变，且新机器上的卷仍挂到 `/app/backend/data`，历史记录和资产就能继续访问。
+
 ### 1. 启动 Redis
 
 ```bash

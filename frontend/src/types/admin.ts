@@ -18,8 +18,8 @@ export interface AdminUserListResponse {
 export interface AdminSystemStatus {
   backend_status: string;
   database_status: string;
-  oss_configured: boolean;
-  oss_provider: string;
-  oss_bucket: string | null;
+  storage_mode: string;
+  storage_path: string;
+  oss_compat_enabled: boolean;
   environment: string;
 }

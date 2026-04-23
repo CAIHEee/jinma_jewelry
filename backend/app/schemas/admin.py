@@ -41,9 +41,9 @@ class AdminUserListResponse(BaseModel):
 class AdminSystemStatus(BaseModel):
     backend_status: str
     database_status: str
-    oss_configured: bool
-    oss_provider: str
-    oss_bucket: str | None = None
+    storage_mode: str
+    storage_path: str
+    oss_compat_enabled: bool
     environment: str
 
 

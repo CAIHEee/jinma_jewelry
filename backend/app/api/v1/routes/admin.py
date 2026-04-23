@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import text
 
@@ -13,6 +15,7 @@ from app.services.user_service import UserService
 router = APIRouter()
 service = UserService()
 settings = get_settings()
+LOCAL_STORAGE_PATH = (Path(__file__).resolve().parents[4] / "data" / "local_assets").as_posix()
 
 
 @router.get("/admin/users", response_model=AdminUserListResponse)
@@ -32,9 +35,9 @@ def get_system_status(_: User = Depends(require_root)) -> AdminSystemStatus:
     return AdminSystemStatus(
         backend_status="ok",
         database_status=database_status,
-        oss_configured=settings.oss_enabled,
-        oss_provider=settings.oss_provider,
-        oss_bucket=settings.oss_bucket if settings.oss_enabled else None,
+        storage_mode="local_disk",
+        storage_path=LOCAL_STORAGE_PATH,
+        oss_compat_enabled=settings.oss_enabled,
         environment=settings.app_env,
     )
 
