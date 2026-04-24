@@ -80,6 +80,40 @@ chmod +x stop_offline_stack.sh
 
 Compose 项目名固定为 `jinma_jewelry_system`，会继续复用原有数据卷。
 
+### 更新是否会覆盖旧数据
+
+正常更新不会覆盖旧数据。
+
+下面这些操作只会更新程序，不会删除已有数据库和图片数据：
+
+```bash
+./stop_offline_stack.sh
+./start_offline_stack.sh
+```
+
+或者重新生成新的离线包后，在新目录执行：
+
+```bash
+./stop_offline_stack.sh
+./start_offline_stack.sh
+```
+
+只要 Docker 数据卷还在，系统就会继续使用旧数据。
+
+会导致数据丢失或被旧备份覆盖的情况只有这些：
+
+- 执行了 `docker compose down -v`
+- 手动删除了 Docker volume
+- 执行了 `restore_offline_stack.sh`，并恢复了旧备份
+- 修改了 Compose 项目名或卷名，导致挂到了另一套新卷
+
+推荐的安全更新顺序：
+
+1. 先备份当前数据
+2. 停止旧服务
+3. 使用新的离线包启动
+4. 检查页面和接口是否正常
+
 ## 数据位置
 
 - MySQL 数据卷：`jinma_jewelry_system_mysql_data`

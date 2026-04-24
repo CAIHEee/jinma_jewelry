@@ -5304,6 +5304,136 @@ input:disabled {
     border-radius: 10px;
   }
 
+  .topbar-nav-button,
+  .topbar-user-trigger,
+  .sidebar-mobile-close,
+  .primary-button,
+  .secondary-button,
+  .compact-button,
+  .template-trigger-button,
+  .template-close-button,
+  .filter-chip,
+  .asset-primary-nav-button,
+  .source-mode-button,
+  .fusion-primary-chip-button,
+  .drawer-summary,
+  .split-preview-tab,
+  .asset-modal-scope-button,
+  .asset-card,
+  .asset-thumb-button,
+  .history-preview-button,
+  .upload-dropzone,
+  .history-icon-button,
+  .asset-card-action-row .asset-action-button,
+  .asset-upload-button,
+  .asset-file-picker-button,
+  .admin-user-main,
+  .lightbox-close,
+  .lightbox-pane-reset,
+  .split-result-thumbnail-selector,
+  .split-result-thumbnail-download {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .topbar-nav-button:active,
+  .topbar-user-trigger:active,
+  .sidebar-mobile-close:active,
+  .primary-button:active:not(:disabled),
+  .secondary-button:active:not(:disabled),
+  .compact-button:active:not(:disabled),
+  .template-trigger-button:active,
+  .template-close-button:active,
+  .filter-chip:active,
+  .asset-primary-nav-button:active,
+  .source-mode-button:active,
+  .fusion-primary-chip-button:active,
+  .drawer-summary:active,
+  .split-preview-tab:active:not(:disabled),
+  .asset-modal-scope-button:active,
+  .asset-card:active,
+  .asset-thumb-button:active,
+  .history-preview-button:active,
+  .upload-dropzone:active,
+  .history-icon-button:active:not(:disabled),
+  .asset-card-action-row .asset-action-button:active:not(:disabled),
+  .asset-upload-button:active:not(:disabled),
+  .asset-file-picker-button:active,
+  .admin-user-main:active,
+  .lightbox-close:active,
+  .lightbox-pane-reset:active,
+  .split-result-thumbnail-selector:active,
+  .split-result-thumbnail-download:active {
+    transform: scale(0.97);
+  }
+
+  .primary-button:active:not(:disabled),
+  .asset-upload-button:active:not(:disabled),
+  .split-result-thumbnail-download:active {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 4px 12px rgba(0, 0, 0, 0.18);
+    filter: brightness(0.96);
+  }
+
+  .secondary-button:active:not(:disabled),
+  .compact-button:active:not(:disabled),
+  .template-trigger-button:active,
+  .asset-file-picker-button:active,
+  .lightbox-pane-reset:active {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(242, 202, 72, 0.28);
+    box-shadow:
+      inset 0 0 0 1px rgba(242, 202, 72, 0.06),
+      0 4px 12px rgba(0, 0, 0, 0.14);
+  }
+
+  .filter-chip:active,
+  .asset-primary-nav-button:active,
+  .source-mode-button:active,
+  .fusion-primary-chip-button:active,
+  .asset-modal-scope-button:active,
+  .split-preview-tab:active:not(:disabled) {
+    border-color: rgba(242, 202, 72, 0.42);
+    box-shadow:
+      inset 0 0 0 1px rgba(242, 202, 72, 0.08),
+      0 4px 10px rgba(0, 0, 0, 0.14);
+  }
+
+  .drawer-summary:active,
+  .admin-user-main:active,
+  .asset-card:active,
+  .asset-thumb-button:active,
+  .history-preview-button:active,
+  .upload-dropzone:active,
+  .split-result-thumbnail-selector:active {
+    border-color: rgba(242, 202, 72, 0.34);
+    box-shadow:
+      inset 0 0 0 1px rgba(242, 202, 72, 0.08),
+      0 4px 10px rgba(0, 0, 0, 0.12);
+    filter: brightness(0.97);
+  }
+
+  .template-close-button:active,
+  .topbar-nav-button:active,
+  .sidebar-mobile-close:active,
+  .history-icon-button:active:not(:disabled),
+  .lightbox-close:active {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(242, 202, 72, 0.26);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+  }
+
+  .topbar-user-trigger:active {
+    border-color: rgba(242, 202, 72, 0.28);
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14);
+  }
+
+  .upload-dropzone:active {
+    background: linear-gradient(180deg, rgba(39, 33, 21, 0.95), rgba(26, 24, 20, 0.84));
+  }
+
   .topbar,
   .toolbar,
   .admin-create-grid,
@@ -5456,10 +5586,65 @@ input:disabled {
     min-height: 0;
   }
 
-  .topbar,
+  .topbar {
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
   .toolbar {
     align-items: start;
     flex-direction: column;
+  }
+
+  .topbar-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .topbar-actions {
+    width: fit-content;
+    max-width: fit-content;
+    margin-left: auto;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .topbar-user-menu {
+    width: auto;
+  }
+
+  .topbar-title-block {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .topbar h1 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-user-trigger {
+    min-height: 34px;
+    padding: 0 8px 0 4px;
+    gap: 6px;
+    border-radius: 12px;
+  }
+
+  .topbar-user-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+
+  .topbar-user-name {
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   .prompt-input-header,
@@ -5977,14 +6162,33 @@ input:disabled {
   }
 
   .topbar-user-menu {
-    width: 100%;
+    width: auto;
+    max-width: 132px;
+  }
+
+  .topbar-main {
+    align-items: center;
+    gap: 8px;
+  }
+
+  .topbar-title-block {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .topbar h1 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .topbar-user-trigger {
-    width: 100%;
+    width: auto;
+    max-width: 132px;
     justify-content: flex-start;
-    min-height: 42px;
-    padding: 0 12px 0 7px;
+    min-height: 32px;
+    padding: 0 7px 0 4px;
+    gap: 5px;
   }
 
   .topbar-user-dropdown {
@@ -5994,13 +6198,17 @@ input:disabled {
   }
 
   .topbar-user-avatar {
-    width: 30px;
-    height: 30px;
-    font-size: 12px;
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
   }
 
   .topbar-user-name {
-    font-size: 12px;
+    font-size: 10px;
+    line-height: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .topbar-nav-button {
@@ -6352,7 +6560,8 @@ input:disabled {
   }
 
   .topbar-actions {
-    width: 100%;
+    width: fit-content;
+    max-width: fit-content;
   }
 
   .topbar-user-trigger {
