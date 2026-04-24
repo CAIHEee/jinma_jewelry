@@ -95,11 +95,12 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
 
   const selectedHistory = useMemo(() => pageRuns.find((item) => item.id === selectedHistoryId) ?? null, [pageRuns, selectedHistoryId]);
   const activeHistory = selectedHistory ?? (!splitResult ? pageRuns[0] ?? null : null);
+  const hasCurrentSourceSelection = Boolean(uploadedPreviewUrl || selectedAssets[0]);
   const sourcePreviewUrl =
-    activeHistory?.sourceImageUrl ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null;
+    uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? activeHistory?.sourceImageUrl ?? null;
   const activeSplitItems = useMemo<MultiViewSplitItem[]>(
     () =>
-      activeHistory?.splitItems.length
+      !hasCurrentSourceSelection && activeHistory?.splitItems.length
         ? activeHistory.splitItems.map((item) => ({
             view: item.view,
             image_url: item.imageUrl,
@@ -108,8 +109,17 @@ export function MultiViewSplitPage({ assetItems, onRecordRun, pageRuns, onDelete
             height: item.height,
           }))
         : splitResult?.items ?? [],
-    [activeHistory, splitResult],
+    [activeHistory, hasCurrentSourceSelection, splitResult],
   );
+
+  useEffect(() => {
+    if (!hasCurrentSourceSelection) {
+      return;
+    }
+
+    setSelectedHistoryId(null);
+    setActiveTab("source");
+  }, [hasCurrentSourceSelection, uploadedPreviewUrl, selectedAssets]);
 
   async function resolveSourceImageUrl() {
     if (selectedAssets[0]) {

@@ -11,6 +11,15 @@ export function PromptTemplateImporter({ templates, onImport }: PromptTemplateIm
   const [open, setOpen] = useState(false);
   const [language, setLanguage] = useState<"english" | "chinese">("chinese");
 
+  function closeModal() {
+    setOpen(false);
+  }
+
+  function importTemplate(content: string) {
+    onImport(content);
+    setOpen(false);
+  }
+
   const currentTemplates = useMemo(
     () =>
       templates.map((template) => ({
@@ -28,17 +37,13 @@ export function PromptTemplateImporter({ templates, onImport }: PromptTemplateIm
     const htmlElement = document.documentElement;
     const previousOverflow = document.body.style.overflow;
     const previousHtmlOverflow = htmlElement.style.overflow;
-    const previousTouchAction = document.body.style.touchAction;
-    const previousHtmlTouchAction = htmlElement.style.touchAction;
 
     htmlElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
-    htmlElement.style.touchAction = "none";
-    document.body.style.touchAction = "none";
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setOpen(false);
+        closeModal();
       }
     }
 
@@ -47,8 +52,6 @@ export function PromptTemplateImporter({ templates, onImport }: PromptTemplateIm
     return () => {
       htmlElement.style.overflow = previousHtmlOverflow;
       document.body.style.overflow = previousOverflow;
-      htmlElement.style.touchAction = previousHtmlTouchAction;
-      document.body.style.touchAction = previousTouchAction;
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
@@ -64,14 +67,34 @@ export function PromptTemplateImporter({ templates, onImport }: PromptTemplateIm
       </button>
 
       {open ? (
-        <div className="template-modal-backdrop" role="presentation" onClick={() => setOpen(false)}>
-          <div className="template-modal-card" role="dialog" aria-modal="true" aria-label="提示词模板库" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="template-modal-backdrop"
+          role="presentation"
+          onClick={closeModal}
+          onPointerUp={closeModal}
+        >
+          <div
+            className="template-modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="提示词模板库"
+            onClick={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+            onTouchEnd={(event) => event.stopPropagation()}
+          >
             <div className="template-modal-header">
               <div className="stack-list compact-stack">
                 <h3>提示词模板库</h3>
                 <p className="muted">支持中英文模板，一键导入后仍可继续修改。</p>
               </div>
-              <button className="template-close-button" type="button" onClick={() => setOpen(false)} aria-label="关闭模板窗口">
+              <button
+                className="template-close-button"
+                type="button"
+                onClick={closeModal}
+                onPointerUp={closeModal}
+                onTouchEnd={closeModal}
+                aria-label="关闭模板窗口"
+              >
                 ×
               </button>
             </div>
@@ -116,10 +139,9 @@ export function PromptTemplateImporter({ templates, onImport }: PromptTemplateIm
                     <button
                       className="primary-button compact-button"
                       type="button"
-                      onClick={() => {
-                        onImport(template.content);
-                        setOpen(false);
-                      }}
+                      onClick={() => importTemplate(template.content)}
+                      onPointerUp={() => importTemplate(template.content)}
+                      onTouchEnd={() => importTemplate(template.content)}
                     >
                       一键导入
                     </button>

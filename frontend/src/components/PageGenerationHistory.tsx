@@ -14,12 +14,13 @@ interface PageGenerationHistoryProps {
   onDeleteHistory?: (historyId: string) => Promise<void> | void;
 }
 
-export function PageGenerationHistory({ title, items, activeId, onPreview, onDeleteHistory }: PageGenerationHistoryProps) {
+export function PageGenerationHistory({ title: _title, items, activeId, onPreview, onDeleteHistory }: PageGenerationHistoryProps) {
   const { isMobile } = useViewport();
   const [collapsed, setCollapsed] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<ModuleHistoryEntry | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const sidebarTitle = "历史记录";
 
   function resolveDisplayTitle(item: ModuleHistoryEntry): string {
     return appendSecondSuffixToName(item.title, item.createdAt);
@@ -48,7 +49,7 @@ export function PageGenerationHistory({ title, items, activeId, onPreview, onDel
       <div className="page-history-sidebar-header">
         {!collapsed || isMobile ? (
           <div className="stack-list compact-stack">
-            <h4>{title}</h4>
+            <h4>{sidebarTitle}</h4>
           </div>
         ) : (
           <span className="page-history-sidebar-mini-title">历史</span>
