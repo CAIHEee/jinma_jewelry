@@ -437,6 +437,13 @@ NGINX_IMAGE=jinma-nginx:offline \
 deploy/docker/prepare_offline_bundle.sh
 ```
 
+如果 Python 依赖下载很慢，可以在 `.env.docker` 或命令前切换 `PIP_INDEX_URL`，默认使用清华 PyPI 源：
+
+```bash
+PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
+deploy/docker/prepare_offline_bundle.sh
+```
+
 脚本会在 `dist/offline_bundle` 下生成：
 
 - `jinma-images.tar`
@@ -477,6 +484,61 @@ chmod +x start_offline_stack.sh
 - `jinma_jewelry_system_redis_data`
 
 更新时不要执行 `docker compose down -v`，否则会删除这些 volume，数据库和本地图片都会丢。
+
+### 离线包备份与恢复
+
+如果你要备份当前离线包运行中的数据库和本地图片，可以直接使用脚本：
+
+```bash
+chmod +x deploy/docker/backup_offline_stack.sh
+deploy/docker/backup_offline_stack.sh
+```
+
+默认会在 `dist/offline_backup` 下生成：
+
+- `jinma.sql`
+- `backend_data.tar.gz`
+
+如果你要自定义备份目录：
+
+```bash
+deploy/docker/backup_offline_stack.sh /path/to/backup_dir
+```
+
+恢复时使用：
+
+```bash
+chmod +x deploy/docker/restore_offline_stack.sh
+deploy/docker/restore_offline_stack.sh
+```
+
+默认会从：
+
+- `dist/offline_backup`
+- `dist/offline_bundle`
+
+读取备份和离线包。
+
+如果你要手动指定目录：
+
+```bash
+deploy/docker/restore_offline_stack.sh /path/to/backup_dir /path/to/offline_bundle
+```
+
+恢复流程会自动：
+
+- 启动离线包容器
+- 导入 `jinma.sql`
+- 恢复 `backend_data.tar.gz`
+- 重启整套服务
+
+建议长期保留这些文件：
+
+- `jinma-images.tar`
+- `.env.docker`
+- `docker-compose.yml`
+- `jinma.sql`
+- `backend_data.tar.gz`
 
 ### 迁移到另一台机器
 

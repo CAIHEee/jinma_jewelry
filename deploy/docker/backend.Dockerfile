@@ -6,6 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app/backend
 
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gcc \
@@ -15,7 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./requirements.txt
-RUN python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+RUN python -m pip install --upgrade pip -i "$PIP_INDEX_URL" \
+    && python -m pip install -r requirements.txt -i "$PIP_INDEX_URL"
 
 COPY backend/ /app/backend/
 COPY deploy/ /app/deploy/
@@ -25,4 +28,3 @@ RUN mkdir -p /app/backend/data/local_assets
 EXPOSE 8000
 
 CMD ["gunicorn", "app.main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "2"]
-

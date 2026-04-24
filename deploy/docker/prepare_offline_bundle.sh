@@ -19,6 +19,9 @@ docker compose \
   -f "$ROOT_DIR/docker-compose.build.yml" \
   build
 
+docker pull mysql:8.4
+docker pull redis:7-alpine
+
 docker save -o "$OUTPUT_DIR/jinma-images.tar" \
   "$BACKEND_IMAGE" \
   "$NGINX_IMAGE" \
@@ -26,10 +29,16 @@ docker save -o "$OUTPUT_DIR/jinma-images.tar" \
   "redis:7-alpine"
 
 cp "$ROOT_DIR/docker-compose.yml" "$OUTPUT_DIR/docker-compose.yml"
-cp "$ROOT_DIR/README.md" "$OUTPUT_DIR/README.md"
+cp "$ROOT_DIR/deploy/docker/README.offline.md" "$OUTPUT_DIR/README.md"
 cp "$ROOT_DIR/deploy/docker/start_offline_stack.sh" "$OUTPUT_DIR/start_offline_stack.sh"
 cp "$ROOT_DIR/deploy/docker/stop_offline_stack.sh" "$OUTPUT_DIR/stop_offline_stack.sh"
-chmod +x "$OUTPUT_DIR/start_offline_stack.sh" "$OUTPUT_DIR/stop_offline_stack.sh"
+cp "$ROOT_DIR/deploy/docker/backup_offline_stack.sh" "$OUTPUT_DIR/backup_offline_stack.sh"
+cp "$ROOT_DIR/deploy/docker/restore_offline_stack.sh" "$OUTPUT_DIR/restore_offline_stack.sh"
+chmod +x \
+  "$OUTPUT_DIR/start_offline_stack.sh" \
+  "$OUTPUT_DIR/stop_offline_stack.sh" \
+  "$OUTPUT_DIR/backup_offline_stack.sh" \
+  "$OUTPUT_DIR/restore_offline_stack.sh"
 
 echo "Offline bundle created at: $OUTPUT_DIR"
 echo "Files:"
@@ -38,4 +47,5 @@ echo "  - $OUTPUT_DIR/.env.docker"
 echo "  - $OUTPUT_DIR/docker-compose.yml"
 echo "  - $OUTPUT_DIR/start_offline_stack.sh"
 echo "  - $OUTPUT_DIR/stop_offline_stack.sh"
-
+echo "  - $OUTPUT_DIR/backup_offline_stack.sh"
+echo "  - $OUTPUT_DIR/restore_offline_stack.sh"

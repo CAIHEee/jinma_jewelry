@@ -3,12 +3,16 @@ services:
     build:
       context: .
       dockerfile: deploy/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
     image: ${BACKEND_IMAGE}
 
   worker:
     build:
       context: .
       dockerfile: deploy/docker/backend.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
     image: ${BACKEND_IMAGE}
 
   nginx:
@@ -16,4 +20,3 @@ services:
       context: .
       dockerfile: deploy/nginx/Dockerfile
     image: ${NGINX_IMAGE}
-

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import socket
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +23,24 @@ def parse_env_file(path: Path) -> dict[str, str]:
     return values
 
 
+def detect_host_origins() -> str:
+    candidates = ["http://localhost", "http://127.0.0.1"]
+    try:
+        hostname = socket.gethostname()
+        for family, _, _, _, sockaddr in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            if family != socket.AF_INET:
+                continue
+            ip = sockaddr[0]
+            if ip.startswith(("127.", "172.")) or ip == "0.0.0.0":
+                continue
+            origin = f"http://{ip}"
+            if origin not in candidates:
+                candidates.append(origin)
+    except OSError:
+        pass
+    return ",".join(candidates)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate .env.docker from backend/.env and template defaults.")
     parser.add_argument("--output", required=True, help="Output .env.docker path")
@@ -38,7 +57,7 @@ def main() -> int:
         {
             "BACKEND_IMAGE": args.backend_image,
             "NGINX_IMAGE": args.nginx_image,
-            "APP_ALLOWED_ORIGINS": backend_values.get("APP_ALLOWED_ORIGINS", merged.get("APP_ALLOWED_ORIGINS", "")),
+            "APP_ALLOWED_ORIGINS": detect_host_origins(),
             "APP_ALLOWED_ORIGIN_REGEX": backend_values.get("APP_ALLOWED_ORIGIN_REGEX", merged.get("APP_ALLOWED_ORIGIN_REGEX", "")),
             "AUTH_SECRET_KEY": backend_values.get("AUTH_SECRET_KEY", merged.get("AUTH_SECRET_KEY", "")),
             "ROOT_USERNAME": backend_values.get("ROOT_USERNAME", merged.get("ROOT_USERNAME", "root")),
@@ -74,7 +93,76 @@ def main() -> int:
     if "/127.0.0.1:" in database_url or "@127.0.0.1:" in database_url or "@localhost:" in database_url:
         merged["MYSQL_DATABASE"] = database_url.rsplit("/", 1)[-1] if "/" in database_url else merged.get("MYSQL_DATABASE", "jinma")
 
-    lines = [f"{key}={value}" for key, value in merged.items()]
+    lines = [
+        "# Docker Compose 运行环境变量。",
+        "# 这份文件会被离线包启动脚本直接使用。",
+        "",
+        "# 时区，影响容器内日志和时间显示。",
+        f"TZ={merged['TZ']}",
+        "",
+        "# nginx 对外暴露端口。当前建议单机局域网直接使用 80。",
+        f"NGINX_PORT={merged['NGINX_PORT']}",
+        "",
+        "# 离线包镜像名。start_offline_stack.sh 会先 docker load，再按这两个名字启动。",
+        f"BACKEND_IMAGE={merged['BACKEND_IMAGE']}",
+        f"NGINX_IMAGE={merged['NGINX_IMAGE']}",
+        "",
+        "# MySQL 初始化数据库名与 root 密码。",
+        f"MYSQL_DATABASE={merged['MYSQL_DATABASE']}",
+        f"MYSQL_ROOT_PASSWORD={merged['MYSQL_ROOT_PASSWORD']}",
+        "",
+        "# Web API 使用的 gunicorn worker 数量。",
+        f"WEB_CONCURRENCY={merged['WEB_CONCURRENCY']}",
+        "",
+        "# 构建后端镜像时使用的 pip 源。重新打离线包时会用到。",
+        f"PIP_INDEX_URL={merged['PIP_INDEX_URL']}",
+        "",
+        "# 允许访问本服务的前端来源。当前已自动包含 localhost、127.0.0.1 和本机局域网 IP。",
+        f"APP_ALLOWED_ORIGINS={merged['APP_ALLOWED_ORIGINS']}",
+        f"APP_ALLOWED_ORIGIN_REGEX={merged['APP_ALLOWED_ORIGIN_REGEX']}",
+        "",
+        "# 应用鉴权密钥。生产环境必须修改。",
+        f"AUTH_SECRET_KEY={merged['AUTH_SECRET_KEY']}",
+        "",
+        "# root 默认账号信息。首次启动时会按这组配置初始化。",
+        f"ROOT_USERNAME={merged['ROOT_USERNAME']}",
+        f"ROOT_DISPLAY_NAME={merged['ROOT_DISPLAY_NAME']}",
+        f"ROOT_EMAIL={merged['ROOT_EMAIL']}",
+        f"ROOT_DEFAULT_PASSWORD={merged['ROOT_DEFAULT_PASSWORD']}",
+        "",
+        "# AI 平台配置。至少填写你实际在用的一套。",
+        f"AI_DEFAULT_PROVIDER={merged['AI_DEFAULT_PROVIDER']}",
+        f"AI_UPSTREAM_PLATFORM={merged['AI_UPSTREAM_PLATFORM']}",
+        f"APIYI_API_KEY={merged['APIYI_API_KEY']}",
+        f"APIYI_BASE_URL={merged['APIYI_BASE_URL']}",
+        f"APIYI_OPENAI_BASE_URL={merged['APIYI_OPENAI_BASE_URL']}",
+        f"APIYI_GEMINI_BASE_URL={merged['APIYI_GEMINI_BASE_URL']}",
+        f"TTAPI_API_KEY={merged['TTAPI_API_KEY']}",
+        f"TTAPI_FLUX_BASE_URL={merged['TTAPI_FLUX_BASE_URL']}",
+        f"TTAPI_OPENAI_BASE_URL={merged['TTAPI_OPENAI_BASE_URL']}",
+        "",
+        "# 上游调用与队列参数。",
+        f"TTAPI_TIMEOUT_SECONDS={merged['TTAPI_TIMEOUT_SECONDS']}",
+        f"TTAPI_POLL_INTERVAL_SECONDS={merged['TTAPI_POLL_INTERVAL_SECONDS']}",
+        f"TTAPI_POLL_ATTEMPTS={merged['TTAPI_POLL_ATTEMPTS']}",
+        f"AI_MAX_FUSION_IMAGES={merged['AI_MAX_FUSION_IMAGES']}",
+        f"QUEUE_NAME={merged['QUEUE_NAME']}",
+        f"QUEUE_JOB_TIMEOUT_SECONDS={merged['QUEUE_JOB_TIMEOUT_SECONDS']}",
+        f"QUEUE_RESULT_TTL_SECONDS={merged['QUEUE_RESULT_TTL_SECONDS']}",
+        f"QUEUE_USER_MAX_ACTIVE_JOBS={merged['QUEUE_USER_MAX_ACTIVE_JOBS']}",
+        f"QUEUE_ROOT_MAX_ACTIVE_JOBS={merged['QUEUE_ROOT_MAX_ACTIVE_JOBS']}",
+        "",
+        "# Redis 轻量缓存参数。",
+        f"CACHE_JOB_STATUS_TTL_SECONDS={merged['CACHE_JOB_STATUS_TTL_SECONDS']}",
+        f"CACHE_JOB_DEDUPE_TTL_SECONDS={merged['CACHE_JOB_DEDUPE_TTL_SECONDS']}",
+        f"CACHE_MODEL_CATALOG_TTL_SECONDS={merged['CACHE_MODEL_CATALOG_TTL_SECONDS']}",
+        f"CACHE_AUTH_ME_TTL_SECONDS={merged['CACHE_AUTH_ME_TTL_SECONDS']}",
+        "",
+        "# 数据库连接池参数。",
+        f"DB_POOL_SIZE={merged['DB_POOL_SIZE']}",
+        f"DB_MAX_OVERFLOW={merged['DB_MAX_OVERFLOW']}",
+        f"DB_POOL_RECYCLE_SECONDS={merged['DB_POOL_RECYCLE_SECONDS']}",
+    ]
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Generated {output_path}")
     return 0
@@ -82,4 +170,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
