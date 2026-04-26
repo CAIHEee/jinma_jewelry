@@ -42,6 +42,10 @@ function normalizeApiErrorMessage(rawText: string, fallback = "请求失败"): s
 
   try {
     const payload = JSON.parse(trimmed) as unknown;
+    const normalizedKnown = normalizeKnownApiError(payload);
+    if (normalizedKnown) {
+      return normalizedKnown;
+    }
     if (typeof payload === "string" && payload.trim()) {
       return payload;
     }
@@ -82,6 +86,96 @@ function normalizeApiErrorMessage(rawText: string, fallback = "请求失败"): s
   }
 
   return trimmed;
+}
+
+function normalizeKnownApiError(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const detail = "detail" in payload ? (payload as { detail?: unknown }).detail : undefined;
+  const upstreamStatus =
+    detail && typeof detail === "object" && !Array.isArray(detail)
+      ? ("upstream_status" in detail ? (detail as { upstream_status?: unknown }).upstream_status : undefined)
+      : undefined;
+  const upstreamPayload =
+    detail && typeof detail === "object" && !Array.isArray(detail)
+      ? ("upstream_response" in detail ? (detail as { upstream_response?: unknown }).upstream_response : undefined)
+      : undefined;
+  const upstreamError =
+    upstreamPayload && typeof upstreamPayload === "object" && !Array.isArray(upstreamPayload)
+      ? ("error" in upstreamPayload ? (upstreamPayload as { error?: unknown }).error : undefined)
+      : undefined;
+
+  if (upstreamError && typeof upstreamError === "object" && !Array.isArray(upstreamError)) {
+    const code = "code" in upstreamError ? (upstreamError as { code?: unknown }).code : undefined;
+    const message = "message" in upstreamError ? (upstreamError as { message?: unknown }).message : undefined;
+
+    if (code === "insufficient_balance") {
+      return "当前所选 AI 服务余额不足，请前往对应中转平台充值后再试。";
+    }
+    if (code === "model_not_found") {
+      return "当前所选模型不可用，请切换模型或联系管理员检查模型配置。";
+    }
+    if (code === "Timeout") {
+      return "当前所选 AI 服务处理超时，请稍后重试，或切换其他中转/模型。";
+    }
+    if (typeof message === "string" && message.includes("积分不足")) {
+      return "当前所选 AI 服务余额不足，请前往对应中转平台充值后再试。";
+    }
+    if (typeof message === "string" && (message.includes("模型") && message.includes("不存在"))) {
+      return "当前所选模型不可用，请切换模型或联系管理员检查模型配置。";
+    }
+    if (typeof message === "string" && (message.includes("timeout") || message.includes("超时"))) {
+      return "当前所选 AI 服务处理超时，请稍后重试，或切换其他中转/模型。";
+    }
+    if (typeof message === "string" && (message.includes("Invalid token") || message.includes("Invalid Token"))) {
+      return "当前所选 AI 服务认证失败，请联系管理员检查对应中转的 API Key。";
+    }
+    if (typeof message === "string" && (message.includes("self-signed certificate") || message.includes("certificate"))) {
+      return "当前所选 AI 服务证书校验异常，请切换其他中转，或联系管理员检查该中转的 HTTPS 配置。";
+    }
+    if (typeof message === "string" && (message.includes("PNG") || message.includes("正方形") || message.includes("4MB"))) {
+      return "上传图片不符合当前模型要求。请使用 PNG、正方形、且不超过 4MB 的图片后重试。";
+    }
+  }
+
+  if (typeof detail === "string" && detail.includes("insufficient_balance")) {
+    return "当前所选 AI 服务余额不足，请前往对应中转平台充值后再试。";
+  }
+  if (typeof detail === "string" && detail.includes("model_not_found")) {
+    return "当前所选模型不可用，请切换模型或联系管理员检查模型配置。";
+  }
+  if (typeof detail === "string" && (detail.includes("Authentication required") || detail.includes("Unauthorized"))) {
+    return "当前登录状态已失效，请重新登录后再试。";
+  }
+  if (typeof detail === "string" && (detail.includes("SSLV3_ALERT_HANDSHAKE_FAILURE") || detail.includes("handshake failure"))) {
+    return "当前所选 AI 服务连接异常，请稍后重试，或切换其他中转。";
+  }
+  if (typeof detail === "string" && detail.includes("self-signed certificate")) {
+    return "当前所选 AI 服务证书校验异常，请切换其他中转，或联系管理员检查该中转的 HTTPS 配置。";
+  }
+  if (typeof detail === "string" && detail.includes("Failed to download upstream image asset")) {
+    return "上游结果图下载失败，请稍后重试。若多次失败，请切换其他中转。";
+  }
+
+  if (upstreamStatus === 401) {
+    return "当前所选 AI 服务认证失败，请联系管理员检查对应中转的 API Key。";
+  }
+  if (upstreamStatus === 402) {
+    return "当前所选 AI 服务余额不足，请前往对应中转平台充值后再试。";
+  }
+  if (upstreamStatus === 404) {
+    return "当前所选模型或上游资源不存在，请切换模型后重试。";
+  }
+  if (upstreamStatus === 408) {
+    return "当前所选 AI 服务处理超时，请稍后重试，或切换其他中转/模型。";
+  }
+  if (upstreamStatus === 429) {
+    return "当前所选 AI 服务请求过于频繁，请稍后再试。";
+  }
+
+  return null;
 }
 
 async function throwApiError(response: Response, fallback: string): Promise<never> {

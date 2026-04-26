@@ -10,7 +10,6 @@ export interface PromptTemplate {
     | "product-refine"
     | "gemstone-design"
     | "upscale";
-  english: string;
-  chinese: string;
+  content: string;
   note?: string;
 }

@@ -1,12 +1,15 @@
+from pathlib import Path
 from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+ENV_FILE_PATH = Path(__file__).resolve().parents[2] / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(ENV_FILE_PATH),
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
@@ -20,6 +23,7 @@ class Settings(BaseSettings):
         default="http://localhost:5173,http://localhost:3000",
         alias="APP_ALLOWED_ORIGINS",
     )
+    public_base_url: str | None = Field(default=None, alias="APP_PUBLIC_BASE_URL")
     allowed_origin_regex: str | None = Field(default=None, alias="APP_ALLOWED_ORIGIN_REGEX")
     ai_default_provider: str = Field(default="flux", alias="AI_DEFAULT_PROVIDER")
     ai_upstream_platform: str = Field(default="apiyi", alias="AI_UPSTREAM_PLATFORM")
@@ -28,6 +32,17 @@ class Settings(BaseSettings):
     apiyi_base_url: str = Field(default="https://api.apiyi.com", alias="APIYI_BASE_URL")
     apiyi_openai_base_url: str = Field(default="https://api.apiyi.com/v1", alias="APIYI_OPENAI_BASE_URL")
     apiyi_gemini_base_url: str = Field(default="https://api.apiyi.com/v1beta", alias="APIYI_GEMINI_BASE_URL")
+    aiapis_api_key: str | None = Field(default=None, alias="AIAPIS_API_KEY")
+    aiapis_base_url: str = Field(default="https://aiapis.help/v1", alias="AIAPIS_BASE_URL")
+    aiapis_timeout_seconds: float = Field(default=300.0, alias="AIAPIS_TIMEOUT_SECONDS")
+    dmxapi_api_key: str | None = Field(default=None, alias="DMXAPI_API_KEY")
+    dmxapi_base_url: str = Field(default="https://www.dmxapi.cn/v1", alias="DMXAPI_BASE_URL")
+    dmxapi_timeout_seconds: float = Field(default=180.0, alias="DMXAPI_TIMEOUT_SECONDS")
+    wuyin_api_key: str | None = Field(default=None, alias="WUYIN_API_KEY")
+    wuyin_base_url: str = Field(default="https://api.wuyinkeji.com", alias="WUYIN_BASE_URL")
+    wuyin_timeout_seconds: float = Field(default=120.0, alias="WUYIN_TIMEOUT_SECONDS")
+    wuyin_poll_interval_seconds: float = Field(default=3.0, alias="WUYIN_POLL_INTERVAL_SECONDS")
+    wuyin_poll_attempts: int = Field(default=40, alias="WUYIN_POLL_ATTEMPTS")
     ttapi_api_key: str | None = Field(default=None, alias="TTAPI_API_KEY")
     ttapi_flux_base_url: str = Field(default="https://api.ttapi.io", alias="TTAPI_FLUX_BASE_URL")
     ttapi_openai_base_url: str = Field(default="https://api.ttapi.org", alias="TTAPI_OPENAI_BASE_URL")

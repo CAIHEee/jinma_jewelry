@@ -285,7 +285,7 @@ export function AdminPage({
       ) : null}
 
       <section className="panel compact-panel">
-        <SectionHeader eyebrow="状态" title="系统状态" description="顶部状态已移入此处，仅 root 查看真实接口返回结果。" />
+        <SectionHeader eyebrow="状态" title="系统状态" />
         <div className="admin-status-grid">
           <article className="admin-status-card">
             <span className={systemStatus?.backend_status === "ok" ? "status-pill online" : "status-pill warning"}>

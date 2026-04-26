@@ -326,6 +326,8 @@ cp deploy/docker/.env.docker.example .env.docker
 - `MYSQL_ROOT_PASSWORD`
 - `AUTH_SECRET_KEY`
 - `ROOT_DEFAULT_PASSWORD`
+- `WUYIN_API_KEY`
+- `APP_PUBLIC_BASE_URL`
 - `APIYI_API_KEY` 或 `TTAPI_API_KEY`
 
 4. 从 Docker Hub 拉取并启动容器：

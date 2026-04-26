@@ -82,7 +82,7 @@ export function ReferenceTransformModulePage({
   const templates = getPromptTemplatesByModule(module);
   const initialPrompt = hidePromptEditor
     ? (defaultPrompt ?? "")
-    : (defaultPrompt !== undefined ? defaultPrompt : (templates[0]?.chinese ?? ""));
+    : (defaultPrompt !== undefined ? defaultPrompt : (templates[0]?.content ?? ""));
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
   const [prompt, setPrompt] = useState(initialPrompt);
   const [model, setModel] = useState(defaultModelId);
@@ -111,7 +111,17 @@ export function ReferenceTransformModulePage({
   const selectedHistory = useMemo(() => pageRuns.find((item) => item.id === selectedHistoryId) ?? null, [pageRuns, selectedHistoryId]);
   const activeHistory = selectedHistory ?? (!result ? pageRuns[0] ?? null : null);
   const previewResultUrl = activeHistory?.imageUrl ?? result?.image_url ?? null;
-  const previewSourceUrl = activeHistory?.sourceImageUrl ?? (uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null);
+  const previewSourceUrl = useMemo(() => {
+    const historySourceUrl = activeHistory?.sourceImageUrl ?? null;
+    if (historySourceUrl && historySourceUrl !== previewResultUrl) {
+      return historySourceUrl;
+    }
+    const historySourceImage = activeHistory?.sourceImages[0] ?? null;
+    if (historySourceImage && historySourceImage !== previewResultUrl) {
+      return historySourceImage;
+    }
+    return uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null;
+  }, [activeHistory, previewResultUrl, selectedAssets, uploadedPreviewUrl]);
 
   useEffect(() => {
     return () => {

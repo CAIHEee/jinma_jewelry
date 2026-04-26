@@ -398,7 +398,9 @@ export default function App() {
     if (!user) return;
     try {
       const response = await fetchPersistedHistory(user.role === "root");
-      setPersistedItems(dedupePersistedHistoryItems(response.items));
+      const dedupedItems = dedupePersistedHistoryItems(response.items);
+      setPersistedItems(dedupedItems);
+      setWorkspaceRuns((current) => current.filter((run) => !dedupedItems.some((item) => isPersistedHistoryDuplicateOfRun(item, run))));
       setPersistedError(null);
     } catch (error) {
       setPersistedError(error instanceof Error ? error.message : "加载持久化历史失败");

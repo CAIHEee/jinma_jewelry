@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { PromptTemplate } from "../types/prompts";
 
@@ -9,7 +9,6 @@ interface PromptTemplateImporterProps {
 
 export function PromptTemplateImporter({ templates, onImport }: PromptTemplateImporterProps) {
   const [open, setOpen] = useState(false);
-  const [language, setLanguage] = useState<"english" | "chinese">("chinese");
 
   function closeModal() {
     setOpen(false);
@@ -19,15 +18,6 @@ export function PromptTemplateImporter({ templates, onImport }: PromptTemplateIm
     onImport(content);
     setOpen(false);
   }
-
-  const currentTemplates = useMemo(
-    () =>
-      templates.map((template) => ({
-        ...template,
-        content: language === "english" ? template.english : template.chinese,
-      })),
-    [language, templates],
-  );
 
   useEffect(() => {
     if (!open) {
@@ -85,7 +75,7 @@ export function PromptTemplateImporter({ templates, onImport }: PromptTemplateIm
             <div className="template-modal-header">
               <div className="stack-list compact-stack">
                 <h3>提示词模板库</h3>
-                <p className="muted">支持中英文模板，一键导入后仍可继续修改。</p>
+                <p className="muted">保留中文模板，一键导入后仍可继续修改。</p>
               </div>
               <button
                 className="template-close-button"
@@ -99,35 +89,12 @@ export function PromptTemplateImporter({ templates, onImport }: PromptTemplateIm
               </button>
             </div>
 
-            <div className="template-modal-toolbar">
-              <div className="template-language-row">
-                <button
-                  type="button"
-                  className={language === "chinese" ? "filter-chip active" : "filter-chip"}
-                  onClick={() => setLanguage("chinese")}
-                >
-                  中文版
-                </button>
-                <button
-                  type="button"
-                  className={language === "english" ? "filter-chip active" : "filter-chip"}
-                  onClick={() => setLanguage("english")}
-                >
-                  英文版
-                </button>
-              </div>
-
-              <div className="hint-box template-hint-box">
-                使用 Flux / Kontext 系列模型时，建议优先导入英文版；当前 Nano Banana 2 默认更适合直接使用中文版。
-              </div>
-            </div>
-
             <div className="template-modal-body">
               <div className="template-library-grid">
-                {currentTemplates.map((template) => (
+                {templates.map((template) => (
                   <article className="template-library-card" key={template.id}>
                     <div className="template-library-cover" aria-hidden="true">
-                      <span>{language === "english" ? "EN" : "中文"}</span>
+                      <span>{template.title}</span>
                     </div>
 
                     <div className="stack-list compact-stack">

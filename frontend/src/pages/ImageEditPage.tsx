@@ -18,7 +18,7 @@ import type { ModuleHistoryEntry } from "../utils/history";
 
 const templates = getPromptTemplatesByModule("image-edit");
 const defaultPrompt =
-  templates[0]?.chinese ??
+  templates[0]?.content ??
   "将这张珠宝线稿转换为写实高级珠宝产品图。保留原始轮廓、宝石位置、镶口结构和设计比例，加入抛光贵金属、真实宝石材质、柔和棚拍光线、干净背景和高级商业摄影质感。";
 const progressPhases = [
   { at: 18, label: "分析线稿结构..." },
@@ -72,7 +72,17 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
   const selectedHistory = useMemo(() => pageRuns.find((item) => item.id === selectedHistoryId) ?? null, [pageRuns, selectedHistoryId]);
   const activeHistory = selectedHistory ?? (!result ? pageRuns[0] ?? null : null);
   const previewResultUrl = activeHistory?.imageUrl ?? result?.image_url ?? null;
-  const previewSourceUrl = activeHistory?.sourceImageUrl ?? (uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null);
+  const previewSourceUrl = useMemo(() => {
+    const historySourceUrl = activeHistory?.sourceImageUrl ?? null;
+    if (historySourceUrl && historySourceUrl !== previewResultUrl) {
+      return historySourceUrl;
+    }
+    const historySourceImage = activeHistory?.sourceImages[0] ?? null;
+    if (historySourceImage && historySourceImage !== previewResultUrl) {
+      return historySourceImage;
+    }
+    return uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null;
+  }, [activeHistory, previewResultUrl, selectedAssets, uploadedPreviewUrl]);
 
   useEffect(() => {
     return () => {

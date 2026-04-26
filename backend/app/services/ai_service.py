@@ -1,5 +1,8 @@
 import asyncio
 import base64
+import json
+import subprocess
+import tempfile
 from contextvars import ContextVar, Token
 from datetime import datetime
 from dataclasses import dataclass
@@ -7,7 +10,7 @@ from io import BytesIO
 from math import ceil
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qs, quote, urlencode, urljoin, urlparse
 from uuid import uuid4
 
 import httpx
@@ -44,6 +47,7 @@ class TTAPIModelConfig:
     label: str
     provider: ProviderType
     category: str
+    upstream_model_id: str
     supports_text_to_image: bool
     supports_multi_image_fusion: bool
     supports_reference_images: bool
@@ -51,95 +55,49 @@ class TTAPIModelConfig:
 
 
 MODEL_CATALOG: dict[str, TTAPIModelConfig] = {
+    "gpt-image-2-aiapis": TTAPIModelConfig(
+        id="gpt-image-2-aiapis",
+        label="AIAPIS · GPT Image 2",
+        provider=ProviderType.aiapis,
+        category="image_generation",
+        upstream_model_id="gpt-image-2",
+        supports_text_to_image=True,
+        supports_multi_image_fusion=True,
+        supports_reference_images=True,
+        pricing_hint="GPT Image 2 generation via AIAPIS relay",
+    ),
+    "gpt-image-2-wuyin": TTAPIModelConfig(
+        id="gpt-image-2-wuyin",
+        label="五音 · GPT Image 2",
+        provider=ProviderType.wuyin,
+        category="image_generation",
+        upstream_model_id="gpt-image-2",
+        supports_text_to_image=True,
+        supports_multi_image_fusion=True,
+        supports_reference_images=True,
+        pricing_hint="GPT Image 2 generation via Wuyin relay",
+    ),
+    "gpt-image-2-dmxapi": TTAPIModelConfig(
+        id="gpt-image-2-dmxapi",
+        label="DMXAPI · GPT Image 2",
+        provider=ProviderType.dmxapi,
+        category="image_generation",
+        upstream_model_id="gpt-image-2",
+        supports_text_to_image=False,
+        supports_multi_image_fusion=True,
+        supports_reference_images=True,
+        pricing_hint="GPT Image 2 image editing via DMXAPI relay",
+    ),
     "gemini-3.1-flash-image-preview": TTAPIModelConfig(
         id="gemini-3.1-flash-image-preview",
         label="Nano Banana 2",
         provider=ProviderType.gemini,
         category="image_generation",
+        upstream_model_id="gemini-3.1-flash-image-preview",
         supports_text_to_image=True,
         supports_multi_image_fusion=True,
         supports_reference_images=True,
         pricing_hint="Gemini image preview family on TTAPI",
-    ),
-    "gemini-3-pro-image-preview": TTAPIModelConfig(
-        id="gemini-3-pro-image-preview",
-        label="Nano Banana Pro",
-        provider=ProviderType.gemini,
-        category="image_generation",
-        supports_text_to_image=True,
-        supports_multi_image_fusion=True,
-        supports_reference_images=True,
-        pricing_hint="Gemini pro image preview family on TTAPI",
-    ),
-    "flux1-schnell": TTAPIModelConfig(
-        id="flux1-schnell",
-        label="Flux Schnell",
-        provider=ProviderType.flux,
-        category="image_generation",
-        supports_text_to_image=True,
-        supports_multi_image_fusion=False,
-        supports_reference_images=False,
-        pricing_hint="Fast Flux generation",
-    ),
-    "flux1-dev": TTAPIModelConfig(
-        id="flux1-dev",
-        label="Flux Dev",
-        provider=ProviderType.flux,
-        category="image_generation",
-        supports_text_to_image=True,
-        supports_multi_image_fusion=False,
-        supports_reference_images=False,
-        pricing_hint="General Flux development model",
-    ),
-    "flux1-pro": TTAPIModelConfig(
-        id="flux1-pro",
-        label="Flux Pro",
-        provider=ProviderType.flux,
-        category="image_generation",
-        supports_text_to_image=True,
-        supports_multi_image_fusion=False,
-        supports_reference_images=False,
-        pricing_hint="Higher quality Flux generation",
-    ),
-    "flux-2-pro": TTAPIModelConfig(
-        id="flux-2-pro",
-        label="Flux 2 Pro",
-        provider=ProviderType.flux,
-        category="image_generation",
-        supports_text_to_image=True,
-        supports_multi_image_fusion=False,
-        supports_reference_images=False,
-        pricing_hint="Flux 2 pro tier",
-    ),
-    "flux-2-max": TTAPIModelConfig(
-        id="flux-2-max",
-        label="Flux 2 Max",
-        provider=ProviderType.flux,
-        category="image_generation",
-        supports_text_to_image=True,
-        supports_multi_image_fusion=False,
-        supports_reference_images=False,
-        pricing_hint="Highest Flux 2 quality tier",
-    ),
-    "flux-kontext-pro": TTAPIModelConfig(
-        id="flux-kontext-pro",
-        label="Flux Kontext Pro",
-        provider=ProviderType.flux,
-        category="image_edit",
-        supports_text_to_image=False,
-        supports_multi_image_fusion=True,
-        supports_reference_images=True,
-        pricing_hint="Flux context editing model",
-    ),
-    "flux-kontext-max": TTAPIModelConfig(
-        id="flux-kontext-max",
-        label="Flux Kontext Max",
-        provider=ProviderType.flux,
-        category="image_edit",
-        supports_text_to_image=False,
-        supports_multi_image_fusion=True,
-        supports_reference_images=True,
-        pricing_hint="Highest Flux context editing tier",
     ),
 }
 
@@ -230,6 +188,11 @@ class AIService:
                     detail=f"Model {request.model} does not support text-to-image generation.",
                 )
 
+            if model.provider == ProviderType.aiapis:
+                return await self._generate_with_aiapis_gpt_image2(request=request, model=model)
+            if model.provider == ProviderType.wuyin:
+                return await self._generate_with_wuyin_gpt_image2(request=request, model=model)
+
             if self._use_apiyi():
                 if model.provider == ProviderType.gemini:
                     return await self._generate_with_gemini_apiyi(request=request, model=model)
@@ -307,7 +270,13 @@ class AIService:
                     }
                 )
 
-            if self._use_apiyi():
+            if model.provider == ProviderType.aiapis:
+                result = await self._fuse_with_aiapis_gpt_image2(files=submit_files, metadata=metadata, model=model)
+            elif model.provider == ProviderType.dmxapi:
+                result = await self._fuse_with_dmxapi_gpt_image2(files=submit_files, metadata=metadata, model=model)
+            elif model.provider == ProviderType.wuyin:
+                result = await self._fuse_with_wuyin_gpt_image2(metadata=metadata, model=model)
+            elif self._use_apiyi():
                 if model.provider == ProviderType.gemini:
                     result = await self._fuse_with_gemini_apiyi(files=submit_files, metadata=metadata, model=model)
                 else:
@@ -449,6 +418,13 @@ class AIService:
                     detail="Either file or source_image_url is required.",
                 )
 
+            if model.provider == ProviderType.aiapis:
+                return await self._transform_with_aiapis_gpt_image2(files=submit_files, metadata=metadata, model=model)
+            if model.provider == ProviderType.dmxapi:
+                return await self._transform_with_dmxapi_gpt_image2(files=submit_files, metadata=metadata, model=model)
+            if model.provider == ProviderType.wuyin:
+                return await self._transform_with_wuyin_gpt_image2(metadata=metadata, model=model)
+
             if self._use_apiyi():
                 if model.provider == ProviderType.gemini:
                     return await self._transform_with_gemini_apiyi(files=submit_files, metadata=metadata, model=model)
@@ -587,6 +563,30 @@ class AIService:
             )
         return self.settings.apiyi_api_key
 
+    def _require_aiapis_api_key(self) -> str:
+        if not self.settings.aiapis_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="AIAPIS_API_KEY is not configured.",
+            )
+        return self.settings.aiapis_api_key
+
+    def _require_dmxapi_api_key(self) -> str:
+        if not self.settings.dmxapi_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="DMXAPI_API_KEY is not configured.",
+            )
+        return self.settings.dmxapi_api_key
+
+    def _require_wuyin_api_key(self) -> str:
+        if not self.settings.wuyin_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="WUYIN_API_KEY is not configured.",
+            )
+        return self.settings.wuyin_api_key
+
     def _use_apiyi(self) -> bool:
         return self.settings.ai_upstream_platform.strip().lower() == "apiyi"
 
@@ -594,25 +594,497 @@ class AIService:
         return "APIYI" if self._use_apiyi() else "TTAPI"
 
     def _build_model_pricing_hint(self, model: TTAPIModelConfig, platform_label: str) -> str:
+        if model.provider == ProviderType.aiapis:
+            return "GPT Image 2 generation via AIAPIS relay"
+        if model.provider == ProviderType.wuyin:
+            return "GPT Image 2 generation via Wuyin relay"
+        if model.provider == ProviderType.dmxapi:
+            return "GPT Image 2 image editing via DMXAPI relay"
         if model.id == "gemini-3.1-flash-image-preview":
             return f"Nano Banana 2 image generation via {platform_label}"
-        if model.id == "gemini-3-pro-image-preview":
-            return f"Nano Banana Pro image generation via {platform_label}"
-        if model.id == "flux1-schnell":
-            return f"Fast Flux image generation via {platform_label}"
-        if model.id == "flux1-dev":
-            return f"General Flux image generation via {platform_label}"
-        if model.id == "flux1-pro":
-            return f"High-quality Flux image generation via {platform_label}"
-        if model.id == "flux-2-pro":
-            return f"Flux 2 Pro image generation via {platform_label}"
-        if model.id == "flux-2-max":
-            return f"Flux 2 Max image generation via {platform_label}"
-        if model.id == "flux-kontext-pro":
-            return f"Flux Kontext Pro editing via {platform_label}"
-        if model.id == "flux-kontext-max":
-            return f"Flux Kontext Max editing via {platform_label}"
         return f"{model.label} via {platform_label}"
+
+    async def _generate_with_wuyin_gpt_image2(
+        self,
+        *,
+        request: TextToImageRequest,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        submit_data, final_data, job_id, image_urls = await self._submit_and_poll_wuyin_image_job(
+            prompt=request.prompt,
+            size=request.aspect_ratio,
+            urls=None,
+        )
+        first_image_url = image_urls[0] if image_urls else None
+        if not first_image_url:
+            wuyin_status = self._extract_wuyin_status(final_data)
+            message = "Wuyin GPT Image 2 task did not return any image URL."
+            if wuyin_status == "failed":
+                message = "Wuyin GPT Image 2 task failed."
+            elif wuyin_status == "processing":
+                message = "Wuyin GPT Image 2 task is still processing."
+            return GenerationResult(
+                job_id=job_id,
+                status="failed" if wuyin_status == "failed" else "queued",
+                provider=model.provider,
+                model=model.id,
+                image_url=None,
+                message=message,
+                raw_response=final_data,
+            )
+
+        stored_asset = await self._store_generated_asset(
+            image_url=first_image_url,
+            kind="text_to_image",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=job_id,
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Image generation completed.",
+            raw_response=final_data,
+        )
+        self._persist_history(
+            kind="text_to_image",
+            title=self._history_title_for_kind("text_to_image"),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=request.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "wuyin",
+                "aspect_ratio": request.aspect_ratio,
+                "submitted_size": request.aspect_ratio,
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _generate_with_aiapis_gpt_image2(
+        self,
+        *,
+        request: TextToImageRequest,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_aiapis_api_key()
+        data = await self._post_json_with_bearer_base_url(
+            base_url=self.settings.aiapis_base_url,
+            path="/images/generations",
+            api_key=api_key,
+            payload={
+                "model": model.upstream_model_id,
+                "prompt": request.prompt,
+                "n": 1,
+                "size": self._map_image_size_for_aiapis(request.size),
+                "response_format": "b64_json",
+                "quality": "hd",
+                "style": "natural",
+            },
+            timeout=self.settings.aiapis_timeout_seconds,
+        )
+        data = self._normalize_openai_style_image_urls(data, base_url=self.settings.aiapis_base_url)
+        stored_asset, raw_asset_metadata = await self._store_generated_result_from_openai_payload(
+            data=data,
+            kind="text_to_image",
+            model=model.id,
+        )
+        result = GenerationResult(
+            job_id=self._extract_job_id(data),
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            revised_prompt=self._extract_revised_prompt(data),
+            message="Image generation completed.",
+            raw_response=data,
+        )
+        self._persist_history(
+            kind="text_to_image",
+            title=self._history_title_for_kind("text_to_image"),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=request.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "aiapis",
+                "aspect_ratio": request.aspect_ratio,
+                "submitted_size": self._map_image_size_for_aiapis(request.size),
+                **raw_asset_metadata,
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _fuse_with_wuyin_gpt_image2(
+        self,
+        *,
+        metadata: FusionRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        reference_urls = self._resolve_wuyin_reference_urls(metadata.source_images)
+        submit_data, final_data, job_id, image_urls = await self._submit_and_poll_wuyin_image_job(
+            prompt=self._build_fusion_prompt(metadata),
+            size="1:1",
+            urls=reference_urls,
+        )
+        first_image_url = image_urls[0] if image_urls else None
+        if not first_image_url:
+            wuyin_status = self._extract_wuyin_status(final_data)
+            return GenerationResult(
+                job_id=job_id,
+                status="failed" if wuyin_status == "failed" else "queued",
+                provider=model.provider,
+                model=model.id,
+                image_url=None,
+                message="Fusion task failed." if wuyin_status == "failed" else "Fusion task is still processing.",
+                raw_response=final_data if final_data else submit_data,
+            )
+
+        stored_asset = await self._store_generated_asset(
+            image_url=first_image_url,
+            kind="fusion",
+            model=model.id,
+            preferred_name=self._preferred_fusion_asset_name(metadata),
+        )
+        result = GenerationResult(
+            job_id=job_id,
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Fusion generation completed.",
+            raw_response=final_data,
+        )
+        self._persist_history(
+            kind="fusion",
+            title=self._history_title_for_kind("fusion"),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "wuyin",
+                "reference_urls": reference_urls,
+                **self._build_fusion_history_metadata(metadata),
+                "negative_prompt": metadata.negative_prompt,
+                "strength": metadata.strength,
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _fuse_with_aiapis_gpt_image2(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: FusionRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_aiapis_api_key()
+        fusion_image = await self._build_aiapis_fusion_upload(files)
+        data = await self._post_multipart_with_bearer_base_url(
+            base_url=self.settings.aiapis_base_url,
+            path="/images/edits",
+            api_key=api_key,
+            data={
+                "model": model.upstream_model_id,
+                "prompt": self._build_fusion_prompt(metadata),
+                "size": "1024x1024",
+                "response_format": "b64_json",
+                "quality": "high",
+                "n": "1",
+            },
+            files=[fusion_image],
+            timeout=self.settings.aiapis_timeout_seconds,
+        )
+        data = self._normalize_openai_style_image_urls(data, base_url=self.settings.aiapis_base_url)
+        stored_asset, raw_asset_metadata = await self._store_generated_result_from_openai_payload(
+            data=data,
+            kind="fusion",
+            model=model.id,
+            preferred_name=self._preferred_fusion_asset_name(metadata),
+        )
+        result = GenerationResult(
+            job_id=self._extract_job_id(data),
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Fusion generation completed.",
+            raw_response=data,
+        )
+        self._persist_history(
+            kind="fusion",
+            title=self._history_title_for_kind("fusion"),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "aiapis",
+                **self._build_fusion_history_metadata(metadata),
+                "negative_prompt": metadata.negative_prompt,
+                "strength": metadata.strength,
+                "fusion_input_layout": "grid_square_png",
+                **raw_asset_metadata,
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _fuse_with_dmxapi_gpt_image2(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: FusionRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_dmxapi_api_key()
+        multipart_files = [await self._build_named_multipart_file(file, field_name="image") for file in files]
+        data = await self._post_multipart_with_bearer_base_url(
+            base_url=self.settings.dmxapi_base_url,
+            path="/images/edits",
+            api_key=api_key,
+            data={
+                "model": model.upstream_model_id,
+                "prompt": self._build_fusion_prompt(metadata),
+                "size": "1024x1024",
+                "background": "auto",
+                "output_format": "png",
+                "quality": "high",
+                "n": "1",
+            },
+            files=multipart_files,
+            timeout=self.settings.dmxapi_timeout_seconds,
+        )
+        stored_asset, raw_asset_metadata = await self._store_generated_result_from_openai_payload(
+            data=data,
+            kind="fusion",
+            model=model.id,
+            preferred_name=self._preferred_fusion_asset_name(metadata),
+        )
+        result = GenerationResult(
+            job_id=self._extract_job_id(data),
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Fusion generation completed.",
+            raw_response=data,
+        )
+        self._persist_history(
+            kind="fusion",
+            title=self._history_title_for_kind("fusion"),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "dmxapi",
+                **self._build_fusion_history_metadata(metadata),
+                "negative_prompt": metadata.negative_prompt,
+                "strength": metadata.strength,
+                **raw_asset_metadata,
+                **stored_asset["metadata"],
+            },
+        )
+        return result
+
+    async def _transform_with_wuyin_gpt_image2(
+        self,
+        *,
+        metadata: ReferenceImageRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        reference_urls = self._resolve_wuyin_reference_urls(metadata.source_images)
+        submit_data, final_data, job_id, image_urls = await self._submit_and_poll_wuyin_image_job(
+            prompt=metadata.prompt,
+            size="1:1",
+            urls=reference_urls,
+        )
+        first_image_url = image_urls[0] if image_urls else None
+        if not first_image_url:
+            wuyin_status = self._extract_wuyin_status(final_data)
+            return GenerationResult(
+                job_id=job_id,
+                status="failed" if wuyin_status == "failed" else "queued",
+                provider=model.provider,
+                model=model.id,
+                image_url=None,
+                message="Reference image transform failed." if wuyin_status == "failed" else "Reference image transform is still processing.",
+                raw_response=final_data if final_data else submit_data,
+            ).model_copy(update=self._build_reference_result_update(metadata))
+
+        stored_asset = await self._store_generated_asset(
+            image_url=first_image_url,
+            kind=metadata.feature,
+            model=model.id,
+            preferred_name=metadata.filename,
+        )
+        result = GenerationResult(
+            job_id=job_id,
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Reference image transform completed.",
+            raw_response=final_data,
+        ).model_copy(update=self._build_reference_result_update(metadata))
+        self._persist_history(
+            kind=self._map_feature_to_history_kind(metadata.feature),
+            title=self._feature_title(metadata.feature, model.label),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "wuyin",
+                "reference_urls": reference_urls,
+                **stored_asset["metadata"],
+                **self._build_reference_history_metadata(metadata),
+            },
+        )
+        return result
+
+    async def _transform_with_aiapis_gpt_image2(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: ReferenceImageRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_aiapis_api_key()
+        target_size = self._map_image_size_for_aiapis_from_image_size(metadata.image_size)
+        prepared_file = await self._build_aiapis_single_image_upload(files[0], target_size=target_size)
+        data = await self._post_multipart_with_bearer_base_url(
+            base_url=self.settings.aiapis_base_url,
+            path="/images/edits",
+            api_key=api_key,
+            data={
+                "model": model.upstream_model_id,
+                "prompt": metadata.prompt,
+                "size": target_size,
+                "response_format": "b64_json",
+                "n": "1",
+            },
+            files=[prepared_file],
+            timeout=self.settings.aiapis_timeout_seconds,
+        )
+        data = self._normalize_openai_style_image_urls(data, base_url=self.settings.aiapis_base_url)
+        stored_asset, raw_asset_metadata = await self._store_generated_result_from_openai_payload(
+            data=data,
+            kind=metadata.feature,
+            model=model.id,
+            preferred_name=metadata.filename,
+        )
+        result = GenerationResult(
+            job_id=self._extract_job_id(data),
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Reference image transform completed.",
+            raw_response=data,
+        ).model_copy(update=self._build_reference_result_update(metadata))
+        self._persist_history(
+            kind=self._map_feature_to_history_kind(metadata.feature),
+            title=self._feature_title(metadata.feature, model.label),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "aiapis",
+                "submitted_size": target_size,
+                **raw_asset_metadata,
+                **stored_asset["metadata"],
+                **self._build_reference_history_metadata(metadata),
+            },
+        )
+        return result
+
+    async def _transform_with_dmxapi_gpt_image2(
+        self,
+        *,
+        files: list[UploadFile],
+        metadata: ReferenceImageRequestMetadata,
+        model: TTAPIModelConfig,
+    ) -> GenerationResult:
+        api_key = self._require_dmxapi_api_key()
+        multipart_files = [await self._build_named_multipart_file(file, field_name="image") for file in files]
+        data = await self._post_multipart_with_bearer_base_url(
+            base_url=self.settings.dmxapi_base_url,
+            path="/images/edits",
+            api_key=api_key,
+            data={
+                "model": model.upstream_model_id,
+                "prompt": metadata.prompt,
+                "size": self._map_image_size_for_dmxapi(metadata.image_size),
+                "background": "auto",
+                "output_format": "png",
+                "quality": "high",
+                "n": "1",
+            },
+            files=multipart_files,
+            timeout=self.settings.dmxapi_timeout_seconds,
+        )
+        stored_asset, raw_asset_metadata = await self._store_generated_result_from_openai_payload(
+            data=data,
+            kind=metadata.feature,
+            model=model.id,
+            preferred_name=metadata.filename,
+        )
+        result = GenerationResult(
+            job_id=self._extract_job_id(data),
+            status="completed",
+            provider=model.provider,
+            model=model.id,
+            image_url=stored_asset["access_url"],
+            message="Reference image transform completed.",
+            raw_response=data,
+        ).model_copy(update=self._build_reference_result_update(metadata))
+        self._persist_history(
+            kind=self._map_feature_to_history_kind(metadata.feature),
+            title=self._feature_title(metadata.feature, model.label),
+            model_id=model.id,
+            provider=model.provider.value,
+            status=result.status,
+            prompt=metadata.prompt,
+            job_id=result.job_id,
+            image_url=result.image_url,
+            storage_url=stored_asset["storage_url"],
+            metadata={
+                "upstream_platform": "dmxapi",
+                **raw_asset_metadata,
+                **stored_asset["metadata"],
+                **self._build_reference_history_metadata(metadata),
+            },
+        )
+        return result
 
     async def _generate_with_gemini_apiyi(
         self,
@@ -1027,8 +1499,8 @@ class AIService:
             image_url=result.image_url,
             storage_url=stored_asset["storage_url"],
             metadata={
-                **self._build_reference_history_metadata(metadata),
                 **stored_asset["metadata"],
+                **self._build_reference_history_metadata(metadata),
             },
         )
         return result
@@ -1097,8 +1569,8 @@ class AIService:
             storage_url=stored_asset["storage_url"],
             metadata={
                 "upstream_platform": "apiyi",
-                **self._build_reference_history_metadata(metadata),
                 **stored_asset["metadata"],
+                **self._build_reference_history_metadata(metadata),
             },
         )
         return result
@@ -1286,8 +1758,8 @@ class AIService:
                 image_url=result.image_url,
                 storage_url=stored_asset["storage_url"],
                 metadata={
-                    **self._build_reference_history_metadata(metadata),
                     **stored_asset["metadata"],
+                    **self._build_reference_history_metadata(metadata),
                 },
         )
         return result
@@ -1341,8 +1813,8 @@ class AIService:
                 storage_url=stored_asset["storage_url"],
                 metadata={
                     "upstream_platform": "apiyi",
-                    **self._build_reference_history_metadata(metadata),
                     **stored_asset["metadata"],
+                    **self._build_reference_history_metadata(metadata),
                 },
             )
         return result
@@ -1385,6 +1857,76 @@ class AIService:
             )
         return self._handle_response(response)
 
+    async def _post_json_with_bearer_base_url(
+        self,
+        *,
+        base_url: str,
+        path: str,
+        api_key: str,
+        payload: dict[str, Any],
+        timeout: float,
+    ) -> dict[str, Any]:
+        if self._should_use_curl_transport(base_url):
+            return await self._curl_json_request(
+                method="POST",
+                url=f"{base_url}{path}",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                payload=payload,
+                timeout=timeout,
+            )
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{base_url}{path}",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        return self._handle_response(response)
+
+    async def _post_json_with_authorization(
+        self,
+        *,
+        base_url: str,
+        path: str,
+        api_key: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self.settings.wuyin_timeout_seconds) as client:
+            response = await client.post(
+                f"{base_url}{path}",
+                headers={
+                    "Authorization": api_key,
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        return self._handle_response(response)
+
+    async def _get_json_with_authorization(
+        self,
+        *,
+        base_url: str,
+        path: str,
+        api_key: str,
+        query: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self.settings.wuyin_timeout_seconds) as client:
+            response = await client.get(
+                f"{base_url}{path}",
+                headers={
+                    "Authorization": api_key,
+                    "Accept": "application/json",
+                },
+                params=query,
+            )
+        return self._handle_response(response)
+
     async def _post_multipart(
         self,
         *,
@@ -1421,6 +1963,33 @@ class AIService:
             )
         return self._handle_response(response)
 
+    async def _post_multipart_with_bearer_base_url(
+        self,
+        *,
+        base_url: str,
+        path: str,
+        api_key: str,
+        data: dict[str, str],
+        files: list[tuple[str, tuple[str, bytes, str]]],
+        timeout: float,
+    ) -> dict[str, Any]:
+        if self._should_use_curl_transport(base_url):
+            return await self._curl_multipart_request(
+                url=f"{base_url}{path}",
+                headers={"Authorization": f"Bearer {api_key}"},
+                data=data,
+                files=files,
+                timeout=timeout,
+            )
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{base_url}{path}",
+                headers={"Authorization": f"Bearer {api_key}"},
+                data=data,
+                files=files,
+            )
+        return self._handle_response(response)
+
     async def _poll_flux_result(self, *, job_id: str, api_key: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=self.settings.ttapi_timeout_seconds) as client:
             for _ in range(self.settings.ttapi_poll_attempts):
@@ -1438,6 +2007,51 @@ class AIService:
                     return data
                 await asyncio.sleep(self.settings.ttapi_poll_interval_seconds)
         return {"id": job_id, "status": "queued"}
+
+    async def _poll_wuyin_result(self, *, job_id: str, api_key: str) -> dict[str, Any]:
+        last_data: dict[str, Any] = {"id": job_id, "data": {"status": 0}}
+        for _ in range(self.settings.wuyin_poll_attempts):
+            data = await self._get_json_with_authorization(
+                base_url=self.settings.wuyin_base_url,
+                path="/api/async/detail",
+                api_key=api_key,
+                query={"id": job_id},
+            )
+            last_data = data
+            if self._extract_wuyin_image_urls(data):
+                return data
+            status_value = self._extract_wuyin_status(data)
+            if status_value in {"failed", "succeeded"}:
+                return data
+            await asyncio.sleep(self.settings.wuyin_poll_interval_seconds)
+        return last_data
+
+    async def _submit_and_poll_wuyin_image_job(
+        self,
+        *,
+        prompt: str,
+        size: str,
+        urls: list[str] | None,
+    ) -> tuple[dict[str, Any], dict[str, Any], str | None, list[str]]:
+        api_key = self._require_wuyin_api_key()
+        payload: dict[str, Any] = {
+            "prompt": prompt,
+            "size": size,
+            "count": "1",
+        }
+        if urls:
+            payload["urls"] = urls
+        submit_data = await self._post_json_with_authorization(
+            base_url=self.settings.wuyin_base_url,
+            path="/api/async/image_gpt",
+            api_key=api_key,
+            payload=payload,
+        )
+        job_id = self._extract_job_id(submit_data)
+        if not job_id:
+            return submit_data, submit_data, None, []
+        final_data = await self._poll_wuyin_result(job_id=job_id, api_key=api_key)
+        return submit_data, final_data, job_id, self._extract_wuyin_image_urls(final_data)
 
     def _handle_response(self, response: httpx.Response) -> dict[str, Any]:
         try:
@@ -1474,6 +2088,38 @@ class AIService:
             ),
         )
 
+    async def _build_named_multipart_file(self, file: UploadFile, *, field_name: str) -> tuple[str, tuple[str, bytes, str]]:
+        content = await file.read()
+        await file.seek(0)
+        return (
+            field_name,
+            (
+                file.filename or f"{uuid4()}.png",
+                content,
+                file.content_type or "image/png",
+            ),
+        )
+
+    async def _build_aiapis_single_image_upload(self, file: UploadFile, *, target_size: str) -> tuple[str, tuple[str, bytes, str]]:
+        content = await file.read()
+        await file.seek(0)
+        normalized = await asyncio.to_thread(
+            self._normalize_image_for_aiapis,
+            content,
+            target_size,
+        )
+        filename = f"{Path(file.filename or 'reference').stem or 'reference'}.png"
+        return ("image", (filename, normalized, "image/png"))
+
+    async def _build_aiapis_fusion_upload(self, files: list[UploadFile]) -> tuple[str, tuple[str, bytes, str]]:
+        images: list[bytes] = []
+        for file in files:
+            content = await file.read()
+            await file.seek(0)
+            images.append(content)
+        composed = await asyncio.to_thread(self._compose_aiapis_fusion_canvas, images)
+        return ("image", ("fusion-reference.png", composed, "image/png"))
+
     def _build_fusion_prompt(self, metadata: FusionRequestMetadata) -> str:
         mode_hint = {
             "balanced": "Blend the uploaded references evenly.",
@@ -1509,6 +2155,23 @@ class AIService:
             return task["status"].lower()
         if isinstance(task, dict) and isinstance(task.get("state"), str):
             return task["state"].lower()
+        return ""
+
+    def _extract_wuyin_status(self, data: dict[str, Any]) -> str:
+        task = data.get("data")
+        raw_status = task.get("status") if isinstance(task, dict) else data.get("status")
+        mapping = {
+            0: "processing",
+            1: "failed",
+            2: "succeeded",
+            "0": "processing",
+            "1": "failed",
+            "2": "succeeded",
+        }
+        if raw_status in mapping:
+            return mapping[raw_status]
+        if isinstance(raw_status, str):
+            return raw_status.lower()
         return ""
 
     def _extract_revised_prompt(self, data: dict[str, Any]) -> str | None:
@@ -1571,6 +2234,15 @@ class AIService:
                         return value
         return None
 
+    def _extract_wuyin_image_urls(self, data: dict[str, Any]) -> list[str]:
+        task = data.get("data")
+        result = task.get("result") if isinstance(task, dict) else data.get("result")
+        if isinstance(result, list):
+            return [item for item in result if isinstance(item, str) and item]
+        if isinstance(result, str) and result:
+            return [result]
+        return []
+
     def _extract_inline_image(self, data: dict[str, Any]) -> tuple[bytes, str]:
         candidates = data.get("candidates")
         if isinstance(candidates, list):
@@ -1600,6 +2272,45 @@ class AIService:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={"message": "No inline image found in upstream response.", "upstream_response": data},
         )
+
+    def _extract_openai_image_payload(self, data: dict[str, Any]) -> tuple[bytes | None, str | None, str | None]:
+        payload = data.get("data")
+        if isinstance(payload, list):
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                b64_json = item.get("b64_json")
+                if isinstance(b64_json, str) and b64_json:
+                    return base64.b64decode(b64_json), "image/png", None
+                url = item.get("url")
+                if isinstance(url, str) and url:
+                    return None, None, url
+        return None, None, None
+
+    def _normalize_openai_style_image_urls(self, data: dict[str, Any], *, base_url: str) -> dict[str, Any]:
+        payload = data.get("data")
+        if not isinstance(payload, list):
+            return data
+
+        normalized_items: list[Any] = []
+        changed = False
+        for item in payload:
+            if not isinstance(item, dict):
+                normalized_items.append(item)
+                continue
+            normalized_item = dict(item)
+            url = normalized_item.get("url")
+            if isinstance(url, str) and url and not url.startswith(("http://", "https://", "data:")):
+                normalized_item["url"] = urljoin(f"{base_url.rstrip('/')}/", url)
+                changed = True
+            normalized_items.append(normalized_item)
+
+        if not changed:
+            return data
+
+        normalized_data = dict(data)
+        normalized_data["data"] = normalized_items
+        return normalized_data
 
     def _map_apiyi_model_id(self, model_id: str) -> str:
         mapping = {
@@ -1787,6 +2498,107 @@ class AIService:
             "preview_url": preview_url,
         }
 
+    def _map_image_size_for_dmxapi(self, image_size: str) -> str:
+        normalized = image_size.strip().upper()
+        if normalized == "2K":
+            return "1536x1536"
+        return "1024x1024"
+
+    def _map_image_size_for_aiapis(self, size: str) -> str:
+        allowed = {"256x256", "512x512", "1024x1024"}
+        normalized = size.strip().lower()
+        if normalized in allowed:
+            return normalized
+        return "1024x1024"
+
+    def _map_image_size_for_aiapis_from_image_size(self, image_size: str) -> str:
+        normalized = image_size.strip().upper()
+        if normalized == "2K":
+            return "1024x1024"
+        return "1024x1024"
+
+    def _normalize_image_for_aiapis(self, image_bytes: bytes, target_size: str) -> bytes:
+        side = int(target_size.split("x", 1)[0])
+        with Image.open(BytesIO(image_bytes)) as source:
+            image = source.convert("RGBA")
+            fitted = image.copy()
+            fitted.thumbnail((side, side), Image.Resampling.LANCZOS)
+            canvas = Image.new("RGBA", (side, side), (255, 255, 255, 255))
+            offset = ((side - fitted.width) // 2, (side - fitted.height) // 2)
+            canvas.alpha_composite(fitted, offset)
+            return self._serialize_png_under_limit(canvas)
+
+    def _compose_aiapis_fusion_canvas(self, image_payloads: list[bytes]) -> bytes:
+        side = 1024
+        count = max(1, len(image_payloads))
+        columns = 1 if count == 1 else 2 if count <= 4 else 3
+        rows = ceil(count / columns)
+        cell_size = side // max(columns, rows)
+        canvas = Image.new("RGBA", (side, side), (255, 255, 255, 255))
+        for index, payload in enumerate(image_payloads):
+            with Image.open(BytesIO(payload)) as source:
+                tile = source.convert("RGBA")
+                tile.thumbnail((cell_size, cell_size), Image.Resampling.LANCZOS)
+                col = index % columns
+                row = index // columns
+                cell_left = col * cell_size + (cell_size - tile.width) // 2
+                cell_top = row * cell_size + (cell_size - tile.height) // 2
+                canvas.alpha_composite(tile, (cell_left, cell_top))
+        return self._serialize_png_under_limit(canvas)
+
+    def _serialize_png_under_limit(self, image: Image.Image, *, max_bytes: int = 4 * 1024 * 1024) -> bytes:
+        working = image
+        for _ in range(6):
+            output = BytesIO()
+            working.save(output, format="PNG", optimize=True)
+            content = output.getvalue()
+            if len(content) <= max_bytes:
+                return content
+            next_side = max(256, int(working.width * 0.85))
+            working = working.resize((next_side, next_side), Image.Resampling.LANCZOS)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Prepared PNG for GPT Image 2 exceeds the 4MB upstream limit.",
+        )
+
+    def _resolve_wuyin_reference_urls(self, items: list[object]) -> list[str]:
+        resolved: list[str] = []
+        for item in items:
+            payload = item.model_dump() if hasattr(item, "model_dump") else item if isinstance(item, dict) else None
+            if not isinstance(payload, dict):
+                continue
+            storage_url = payload.get("storage_url")
+            preview_url = payload.get("preview_url") or payload.get("source_image_url")
+            candidate = storage_url if isinstance(storage_url, str) and storage_url else preview_url
+            if not isinstance(candidate, str) or not candidate:
+                continue
+            resolved.append(self._build_wuyin_accessible_url(candidate))
+        return resolved
+
+    def _build_wuyin_accessible_url(self, candidate: str) -> str:
+        if candidate.startswith(("http://", "https://")):
+            return candidate
+
+        if candidate.startswith("/api/v1/assets/content"):
+            parsed = urlparse(candidate)
+            nested_storage_url = parse_qs(parsed.query).get("storage_url", [None])[0]
+            if nested_storage_url:
+                return self._build_wuyin_accessible_url(nested_storage_url)
+
+        generated = self.storage_service.generate_access_url(candidate) if self._is_custom_storage_url(candidate) else candidate
+        if isinstance(generated, str) and generated.startswith(("http://", "https://")):
+            return generated
+
+        public_base_url = (self.settings.public_base_url or "").strip().rstrip("/")
+        if not public_base_url:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="APP_PUBLIC_BASE_URL is required for GPT Image 2 reference-image generation.",
+            )
+        if not generated.startswith("/"):
+            generated = f"/{generated}"
+        return f"{public_base_url}{generated}"
+
     async def _store_generated_asset(
         self,
         *,
@@ -1876,6 +2688,36 @@ class AIService:
                 "source_image_url": image_url,
             },
         }
+
+    async def _store_generated_result_from_openai_payload(
+        self,
+        *,
+        data: dict[str, Any],
+        kind: str,
+        model: str,
+        preferred_name: str | None = None,
+        name_suffix: str | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        image_bytes, content_type, image_url = self._extract_openai_image_payload(data)
+        if image_bytes is not None and content_type is not None:
+            stored_asset = await self._store_generated_binary_asset(
+                image_bytes=image_bytes,
+                content_type=content_type,
+                kind=kind,
+                model=model,
+                preferred_name=preferred_name,
+                name_suffix=name_suffix,
+            )
+            return stored_asset, {"upstream_response_format": "b64_json"}
+
+        stored_asset = await self._store_generated_asset(
+            image_url=image_url,
+            kind=kind,
+            model=model,
+            preferred_name=preferred_name,
+            name_suffix=name_suffix,
+        )
+        return stored_asset, {"upstream_response_format": "url", "upstream_image_url": image_url}
 
     async def _store_generated_binary_asset(
         self,
@@ -2002,6 +2844,15 @@ class AIService:
             content, content_type, _ = self.asset_service.fetch_asset_bytes(image_url)
             return content, content_type
 
+        if self._should_use_curl_transport(image_url):
+            content, content_type, status_code = await self._curl_download(image_url, timeout=self.settings.ttapi_timeout_seconds)
+            if status_code >= 400:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Failed to download upstream image asset, status={status_code}.",
+                )
+            return content, content_type
+
         async with httpx.AsyncClient(timeout=self.settings.ttapi_timeout_seconds) as client:
             response = await client.get(image_url)
         if response.status_code >= 400:
@@ -2011,6 +2862,189 @@ class AIService:
             )
         content_type = response.headers.get("Content-Type", "image/png").split(";")[0].strip() or "image/png"
         return response.content, content_type
+
+    def _should_use_curl_transport(self, url: str) -> bool:
+        parsed = urlparse(url)
+        return parsed.hostname == "img.aiapis.help"
+
+    async def _curl_json_request(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+        timeout: float,
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(
+            self._run_curl_json_request,
+            method,
+            url,
+            headers,
+            payload,
+            timeout,
+        )
+
+    def _run_curl_json_request(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+        timeout: float,
+    ) -> dict[str, Any]:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=True) as body_file:
+            body_file.write(json.dumps(payload, ensure_ascii=False))
+            body_file.flush()
+            command = [
+                "curl",
+                "-k",
+                "-sS",
+                "-X",
+                method,
+                "--max-time",
+                str(max(1, int(timeout))),
+                "-o",
+                "-",
+                "-w",
+                "\n%{http_code}",
+            ]
+            for key, value in headers.items():
+                command.extend(["-H", f"{key}: {value}"])
+            command.extend(["--data-binary", f"@{body_file.name}", url])
+            completed = subprocess.run(command, check=False, capture_output=True, text=True)
+        return self._handle_curl_response(completed)
+
+    async def _curl_multipart_request(
+        self,
+        *,
+        url: str,
+        headers: dict[str, str],
+        data: dict[str, str],
+        files: list[tuple[str, tuple[str, bytes, str]]],
+        timeout: float,
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(
+            self._run_curl_multipart_request,
+            url,
+            headers,
+            data,
+            files,
+            timeout,
+        )
+
+    def _run_curl_multipart_request(
+        self,
+        url: str,
+        headers: dict[str, str],
+        data: dict[str, str],
+        files: list[tuple[str, tuple[str, bytes, str]]],
+        timeout: float,
+    ) -> dict[str, Any]:
+        temp_paths: list[str] = []
+        try:
+            command = [
+                "curl",
+                "-k",
+                "-sS",
+                "--max-time",
+                str(max(1, int(timeout))),
+                "-o",
+                "-",
+                "-w",
+                "\n%{http_code}",
+            ]
+            for key, value in headers.items():
+                command.extend(["-H", f"{key}: {value}"])
+            for key, value in data.items():
+                command.extend(["-F", f"{key}={value}"])
+            for field_name, (filename, content, content_type) in files:
+                suffix = Path(filename).suffix or ".bin"
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+                    temp_file.write(content)
+                    temp_file.flush()
+                    temp_paths.append(temp_file.name)
+                command.extend(["-F", f"{field_name}=@{temp_paths[-1]};filename={filename};type={content_type}"])
+            command.append(url)
+            completed = subprocess.run(command, check=False, capture_output=True, text=True)
+            return self._handle_curl_response(completed)
+        finally:
+            for path in temp_paths:
+                try:
+                    Path(path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    def _handle_curl_response(self, completed: subprocess.CompletedProcess[str]) -> dict[str, Any]:
+        if completed.returncode != 0:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Curl upstream request failed: {completed.stderr.strip() or completed.stdout.strip()}",
+            )
+        body, _, status_text = completed.stdout.rpartition("\n")
+        try:
+            status_code = int(status_text.strip())
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Invalid curl upstream status trailer: {completed.stdout[-200:]}",
+            ) from exc
+        try:
+            data = json.loads(body)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Invalid upstream response: {body[:1000]}",
+            ) from exc
+        if status_code >= 400:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={"upstream_status": status_code, "upstream_response": data},
+            )
+        return data
+
+    async def _curl_download(self, url: str, *, timeout: float) -> tuple[bytes, str, int]:
+        return await asyncio.to_thread(self._run_curl_download, url, timeout)
+
+    def _run_curl_download(self, url: str, timeout: float) -> tuple[bytes, str, int]:
+        command = [
+            "curl",
+            "-k",
+            "-sS",
+            "-L",
+            "--max-time",
+            str(max(1, int(timeout))),
+            "-D",
+            "-",
+            "-o",
+            "-",
+            "-w",
+            "\n%{http_code}",
+            url,
+        ]
+        completed = subprocess.run(command, check=False, capture_output=True)
+        if completed.returncode != 0:
+            stderr = completed.stderr.decode("utf-8", errors="ignore")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Curl upstream download failed: {stderr.strip()}",
+            )
+        stdout = completed.stdout
+        header_end = stdout.find(b"\r\n\r\n")
+        if header_end == -1:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Invalid curl download response.")
+        header_block = stdout[:header_end].decode("utf-8", errors="ignore")
+        remaining = stdout[header_end + 4 :]
+        body, _, status_bytes = remaining.rpartition(b"\n")
+        try:
+            status_code = int(status_bytes.decode("utf-8", errors="ignore").strip())
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Invalid curl download status trailer.") from exc
+        content_type = "image/png"
+        for line in header_block.splitlines():
+            if line.lower().startswith("content-type:"):
+                content_type = line.split(":", 1)[1].strip().split(";", 1)[0] or "image/png"
+        return body, content_type, status_code
 
     def _require_request_user(self) -> User:
         user = _request_user.get()

@@ -16,7 +16,7 @@ import type { ModuleHistoryEntry } from "../utils/history";
 
 const templates = getPromptTemplatesByModule("grayscale-relief");
 const defaultPrompt =
-  templates[0]?.chinese ??
+  templates[0]?.content ??
   "严格保留参考图的结构、比例与雕塑细节，将其渲染为哑光灰度泥模效果，不要金属反光与宝石折射，仅保留轻微 AO 阴影。";
 const progressPhases = [
   { at: 18, label: "提取结构轮廓..." },

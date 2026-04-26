@@ -1,15 +1,41 @@
 from fastapi.testclient import TestClient
 
+from app.api.v1.routes.ai import cache_service
+
+
 def test_model_catalog_exposes_expected_models(client: TestClient) -> None:
+    cache_service.delete(cache_service.model_catalog_key())
     response = client.get("/api/v1/ai/models")
 
     assert response.status_code == 200
     body = response.json()
-    model_ids = {item["id"] for item in body["models"]}
+    models = {item["id"]: item for item in body["models"]}
+    model_ids = set(models)
+    assert "gpt-image-2-aiapis" in model_ids
+    assert "gpt-image-2-wuyin" in model_ids
+    assert "gpt-image-2-dmxapi" in model_ids
     assert "gemini-3.1-flash-image-preview" in model_ids
-    assert "gemini-3-pro-image-preview" in model_ids
-    assert "flux1-dev" in model_ids
-    assert "flux-kontext-pro" in model_ids
+    assert "gemini-3-pro-image-preview" not in model_ids
+    assert "flux1-dev" not in model_ids
+    assert "flux-kontext-pro" not in model_ids
+    assert models["gpt-image-2-aiapis"]["supports_text_to_image"] is True
+    assert models["gpt-image-2-aiapis"]["supports_multi_image_fusion"] is True
+    assert models["gpt-image-2-aiapis"]["supports_reference_images"] is True
+    assert models["gpt-image-2-aiapis"]["provider"] == "aiapis"
+    assert models["gpt-image-2-aiapis"]["label"].startswith("AIAPIS")
+    assert models["gpt-image-2-wuyin"]["supports_text_to_image"] is True
+    assert models["gpt-image-2-wuyin"]["supports_multi_image_fusion"] is True
+    assert models["gpt-image-2-wuyin"]["supports_reference_images"] is True
+    assert models["gpt-image-2-wuyin"]["provider"] == "wuyin"
+    assert models["gpt-image-2-wuyin"]["label"].startswith("五音")
+    assert models["gpt-image-2-dmxapi"]["supports_text_to_image"] is False
+    assert models["gpt-image-2-dmxapi"]["supports_multi_image_fusion"] is True
+    assert models["gpt-image-2-dmxapi"]["supports_reference_images"] is True
+    assert models["gpt-image-2-dmxapi"]["provider"] == "dmxapi"
+    assert models["gpt-image-2-dmxapi"]["label"].startswith("DMXAPI")
+    assert models["gemini-3.1-flash-image-preview"]["supports_text_to_image"] is True
+    assert models["gemini-3.1-flash-image-preview"]["supports_multi_image_fusion"] is True
+    assert models["gemini-3.1-flash-image-preview"]["supports_reference_images"] is True
 
 
 def test_text_to_image_rejects_unknown_model(auth_client: TestClient) -> None:

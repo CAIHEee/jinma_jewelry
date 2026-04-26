@@ -79,6 +79,13 @@ function normalizeComparableUrl(value: string | null | undefined): string {
   }
 }
 
+function normalizeHistoryTextForDedupe(value: string | null | undefined): string {
+  if (!value) {
+    return "";
+  }
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 const KIND_LABEL_MAP: Record<NormalizedHistoryKind, string> = {
   text_to_image: "\u6587\u751f\u56fe",
   fusion: "\u591a\u56fe\u878d\u5408",
@@ -199,7 +206,13 @@ export function buildModuleHistoryDedupeKey(item: ModuleHistoryEntry): string {
     return buildModuleHistorySplitDedupeKey(item);
   }
 
-  return [item.kind, item.model, item.provider, item.prompt, normalizeComparableUrl(item.imageUrl)].join("|");
+  return [
+    item.kind,
+    normalizeHistoryTextForDedupe(item.model),
+    normalizeHistoryTextForDedupe(item.provider),
+    normalizeHistoryTextForDedupe(item.prompt),
+    normalizeComparableUrl(item.imageUrl),
+  ].join("|");
 }
 
 function containsChinese(value: string): boolean {

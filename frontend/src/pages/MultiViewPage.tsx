@@ -23,7 +23,7 @@ interface MultiViewPageProps {
 
 const multiViewTemplates = getPromptTemplatesByModule("multi-view");
 const defaultPrompt =
-  multiViewTemplates[0]?.chinese ??
+  multiViewTemplates[0]?.content ??
   "基于参考图生成珠宝多视图单图，统一结构、材质、工艺与比例，以四宫格形式输出，并且不用给出文字提示。";
 const progressPhases = [
   { at: 18, label: "分析主视图结构..." },
