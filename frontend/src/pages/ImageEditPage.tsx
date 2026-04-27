@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { AutoResizeTextarea } from "../components/AutoResizeTextarea";
 import { AssetSourcePicker } from "../components/AssetSourcePicker";
 import { FloatingToast } from "../components/FloatingToast";
 import { GenerationProgress } from "../components/GenerationProgress";
 import { PageGenerationHistory } from "../components/PageGenerationHistory";
-import { PromptTemplateImporter } from "../components/PromptTemplateImporter";
 import { ResultPreviewModal } from "../components/ResultPreviewModal";
 import { getPromptTemplatesByModule } from "../data/promptTemplates";
 import { useModelCatalog } from "../hooks/useModelCatalog";
@@ -43,7 +41,6 @@ interface ImageEditPageProps {
 
 export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHistory }: ImageEditPageProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
-  const [prompt, setPrompt] = useState(defaultPrompt);
   const [model, setModel] = useState(defaultModelId);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([]);
@@ -102,11 +99,6 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
       setError("请先选择一张线稿或草图。");
       return;
     }
-    if (!prompt.trim()) {
-      setError("请输入转写提示词。");
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setProgressState("running");
@@ -122,7 +114,7 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         sourceImageUrl: inputFile ? undefined : selectedAssetUrl ?? undefined,
         sourceImageName: inputFile ? undefined : selectedAsset?.name,
         model: selectedModel.id,
-        prompt: prompt.trim(),
+        prompt: defaultPrompt,
         feature: "sketch_to_realistic",
       }, {
         onJobUpdate: (job) => setJobProgress(buildGenerationJobProgress(job, jobProgressLabels)),
@@ -141,7 +133,7 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
         status: response.status,
         imageUrl: response.image_url,
         sourceImageUrl: response.source_image_url ?? uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? null,
-        prompt: prompt.trim(),
+        prompt: defaultPrompt,
       });
       setJobProgress({ percent: 100, label: "已完成" });
       setProgressState("success");
@@ -165,14 +157,6 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy image-edit-layout">
           <div className="form-card parameter-scroll-panel image-edit-form compact-parameter-panel">
-            <AssetSourcePicker
-              title="选择线稿来源"
-              assetItems={assetItems}
-              uploadLabel="上传线稿或草图"
-              onUploadFilesChange={setFiles}
-              onSelectedAssetsChange={setSelectedAssets}
-            />
-
             <label className="input-group compact-input-group">
               <span>模型</span>
               <select value={model} onChange={(event) => setModel(event.target.value)} disabled={models.length === 0}>
@@ -185,13 +169,13 @@ export function ImageEditPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
               {modelError ? <small>{modelError}</small> : null}
             </label>
 
-            <label className="input-group prompt-input-group compact-prompt-group">
-              <div className="prompt-input-header compact-prompt-header">
-                <span>转写提示词</span>
-                <PromptTemplateImporter templates={templates} onImport={setPrompt} />
-              </div>
-              <AutoResizeTextarea className="prompt-textarea" rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} />
-            </label>
+            <AssetSourcePicker
+              title="选择线稿来源"
+              assetItems={assetItems}
+              uploadLabel="上传线稿或草图"
+              onUploadFilesChange={setFiles}
+              onSelectedAssetsChange={setSelectedAssets}
+            />
 
             <GenerationProgress
               state={progressState}

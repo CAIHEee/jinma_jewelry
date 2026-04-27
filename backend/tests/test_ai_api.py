@@ -12,7 +12,7 @@ def test_model_catalog_exposes_expected_models(client: TestClient) -> None:
     models = {item["id"]: item for item in body["models"]}
     model_ids = set(models)
     assert "gpt-image-2-aiapis" in model_ids
-    assert "gpt-image-2-wuyin" in model_ids
+    assert "gpt-image-2-wuyin" not in model_ids
     assert "gpt-image-2-dmxapi" in model_ids
     assert "gemini-3.1-flash-image-preview" in model_ids
     assert "gemini-3-pro-image-preview" not in model_ids
@@ -23,11 +23,6 @@ def test_model_catalog_exposes_expected_models(client: TestClient) -> None:
     assert models["gpt-image-2-aiapis"]["supports_reference_images"] is True
     assert models["gpt-image-2-aiapis"]["provider"] == "aiapis"
     assert models["gpt-image-2-aiapis"]["label"].startswith("AIAPIS")
-    assert models["gpt-image-2-wuyin"]["supports_text_to_image"] is True
-    assert models["gpt-image-2-wuyin"]["supports_multi_image_fusion"] is True
-    assert models["gpt-image-2-wuyin"]["supports_reference_images"] is True
-    assert models["gpt-image-2-wuyin"]["provider"] == "wuyin"
-    assert models["gpt-image-2-wuyin"]["label"].startswith("五音")
     assert models["gpt-image-2-dmxapi"]["supports_text_to_image"] is False
     assert models["gpt-image-2-dmxapi"]["supports_multi_image_fusion"] is True
     assert models["gpt-image-2-dmxapi"]["supports_reference_images"] is True

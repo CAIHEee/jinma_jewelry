@@ -75,7 +75,7 @@ export function PromptTemplateImporter({ templates, onImport }: PromptTemplateIm
             <div className="template-modal-header">
               <div className="stack-list compact-stack">
                 <h3>提示词模板库</h3>
-                <p className="muted">保留中文模板，一键导入后仍可继续修改。</p>
+                <p className="muted">一键导入后仍可继续修改～</p>
               </div>
               <button
                 className="template-close-button"

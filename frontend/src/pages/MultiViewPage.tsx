@@ -24,13 +24,14 @@ interface MultiViewPageProps {
 const multiViewTemplates = getPromptTemplatesByModule("multi-view");
 const defaultPrompt =
   multiViewTemplates[0]?.content ??
-  "基于参考图生成珠宝多视图单图，统一结构、材质、工艺与比例，以四宫格形式输出，并且不用给出文字提示。";
+  "生成基于参考图的4个标准视角（正面（与参照图一致保持不变）、左侧、右侧、背面（采用正交透视法，仅展示作品本身的后部结构））并以2x2网格布局呈现，左侧、右侧、背面与参考图的风格、材质及工艺细节保持一致，所有四个视图必须来自一个连贯的三维模型。左侧、右侧、背面不得添加任何装饰、扭曲透视或虚构结构，无底座、无支架、无脚架、无支撑结构、无基座、无平衡装置。禁止在其背后或下方添加支撑，不用考虑重力，每个视图在几何上必须忠实于参考模型，柔和漫射影棚光线，优先保证细节清晰，避免过曝高光，纯白色哑光珠宝垫背景，8K高分辨率，专业珠宝摄影质感。";
 const progressPhases = [
   { at: 18, label: "分析主视图结构..." },
   { at: 40, label: "提交多视图请求..." },
   { at: 74, label: "生成多角度视图中..." },
   { at: 95, label: "拼合四宫格结果..." },
 ];
+const preferredMultiViewModelId = "gpt-image-2-aiapis";
 const jobProgressLabels = {
   queued: "多视图任务排队中...",
   running: "生成多角度视图中...",
@@ -41,7 +42,11 @@ const jobProgressLabels = {
 
 export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHistory }: MultiViewPageProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
-  const [model, setModel] = useState(defaultModelId);
+  const multiViewDefaultModelId = useMemo(
+    () => models.find((item) => item.id === preferredMultiViewModelId)?.id ?? defaultModelId,
+    [defaultModelId, models],
+  );
+  const [model, setModel] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([]);
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -55,9 +60,9 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
   useEffect(() => {
     if (!models.length) return;
     if (!model || !models.some((item) => item.id === model)) {
-      setModel(defaultModelId);
+      setModel(multiViewDefaultModelId);
     }
-  }, [defaultModelId, model, models]);
+  }, [model, models, multiViewDefaultModelId]);
 
   useEffect(() => {
     if (result || selectedHistoryId || pageRuns.length === 0) {
@@ -156,14 +161,6 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy single-result-layout">
           <div className="form-card parameter-scroll-panel compact-parameter-panel">
-            <AssetSourcePicker
-              title="选择多视图来源"
-              assetItems={assetItems}
-              uploadLabel="上传多视图参考图"
-              onUploadFilesChange={setFiles}
-              onSelectedAssetsChange={setSelectedAssets}
-            />
-
             <label className="input-group compact-input-group">
               <span>模型</span>
               <select value={model} onChange={(event) => setModel(event.target.value)} disabled={models.length === 0}>
@@ -176,6 +173,14 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
               {modelError ? <small>{modelError}</small> : null}
             </label>
 
+            <AssetSourcePicker
+              title="选择多视图来源"
+              assetItems={assetItems}
+              uploadLabel="上传多视图参考图"
+              onUploadFilesChange={setFiles}
+              onSelectedAssetsChange={setSelectedAssets}
+            />
+
             <GenerationProgress
               state={progressState}
               phases={progressPhases}
@@ -186,7 +191,7 @@ export function MultiViewPage({ assetItems, onRecordRun, pageRuns, onDeleteHisto
             />
 
             <button className="primary-button align-start" type="button" onClick={handleGenerate} disabled={loading || !selectedModel}>
-              {loading ? "生成中..." : "生成多视图单图"}
+              {loading ? "生成中..." : "生成多视图"}
             </button>
           </div>
 

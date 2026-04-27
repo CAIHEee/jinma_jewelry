@@ -30,6 +30,8 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
   const [previewState, setPreviewState] = useState<PreviewState | null>(null);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<ModuleHistoryEntry | null>(null);
   const [deletingHistoryId, setDeletingHistoryId] = useState<string | null>(null);
+  const [expandedPromptIds, setExpandedPromptIds] = useState<string[]>([]);
+  const [collapsedHistoryIds, setCollapsedHistoryIds] = useState<string[]>([]);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const normalizedKeyword = keyword.trim().toLowerCase();
@@ -89,6 +91,14 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
     return appendSecondSuffixToName(item.title, item.createdAt);
   }
 
+  function togglePrompt(itemId: string) {
+    setExpandedPromptIds((current) => (current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId]));
+  }
+
+  function toggleHistory(itemId: string) {
+    setCollapsedHistoryIds((current) => (current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId]));
+  }
+
   return (
     <div className="page-stack compact-page">
       <section className="panel compact-panel">
@@ -129,9 +139,11 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
 
         {operationItems.length > 0 ? (
           <div className="session-run-list">
-            {operationItems.map((item) => (
-              <details className="drawer-panel history-drawer unified-history-drawer" key={item.id} open>
-                <summary className="drawer-summary">
+            {operationItems.map((item) => {
+              const historyCollapsed = collapsedHistoryIds.includes(item.id);
+              return (
+              <article className="drawer-panel history-drawer unified-history-drawer" key={item.id}>
+                <div className="drawer-summary history-record-summary">
                   <div className="session-run-copy history-entry-copy">
                     <div className="history-inline-head">
                       <h4>{item.title}</h4>
@@ -142,9 +154,26 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
                     </p>
                     {"ownerUsername" in item && item.ownerUsername ? <p>归属: {item.ownerUsername}</p> : null}
                   </div>
-                </summary>
-                <div className="drawer-content">
-                  <p className="muted">{item.prompt}</p>
+                  <button
+                    className="history-record-toggle"
+                    type="button"
+                    onClick={() => toggleHistory(item.id)}
+                    aria-expanded={!historyCollapsed}
+                    aria-label={historyCollapsed ? "展开历史记录" : "收起历史记录"}
+                    title={historyCollapsed ? "展开" : "收起"}
+                  >
+                    <span aria-hidden="true">{historyCollapsed ? "⌄" : "⌃"}</span>
+                  </button>
+                </div>
+                {!historyCollapsed ? <div className="drawer-content">
+                  {item.prompt ? (
+                    <div className={expandedPromptIds.includes(item.id) ? "history-prompt-bar expanded" : "history-prompt-bar"}>
+                      <p className="history-prompt-text">{item.prompt}</p>
+                      <button className="history-prompt-toggle" type="button" onClick={() => togglePrompt(item.id)}>
+                        {expandedPromptIds.includes(item.id) ? "收起" : "展开"}
+                      </button>
+                    </div>
+                  ) : null}
                   {item.imageUrl ? (
                     <>
                       <button
@@ -195,9 +224,10 @@ export function HistoryPage({ workspaceRuns, persistedItems, persistedError, onD
                       ) : null}
                     </div>
                   )}
-                </div>
-              </details>
-            ))}
+                </div> : null}
+              </article>
+              );
+            })}
           </div>
         ) : (
           <div className="panel-subcard">

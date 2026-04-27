@@ -1,145 +1,229 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 
-import { AssetSourcePicker } from "../components/AssetSourcePicker";
-import { FloatingToast } from "../components/FloatingToast";
-import { ResultPreviewModal } from "../components/ResultPreviewModal";
-import { assetItemToFile, submitRemoveBackground } from "../services/api";
-import type { AssetItem } from "../types/mockData";
+type AgentMessage = {
+  id: string;
+  role: "assistant" | "user";
+  text: string;
+  attachments?: string[];
+};
 
-interface RemoveBackgroundPageProps {
-  assetItems: AssetItem[];
-}
+type AgentConversation = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messages: AgentMessage[];
+};
 
-function buildWhiteDownloadName(sourceName: string | null) {
-  const fallback = "remove-background-white.png";
-  if (!sourceName) return fallback;
-  const normalized = sourceName.trim();
-  if (!normalized) return fallback;
-  const dotIndex = normalized.lastIndexOf(".");
-  const stem = dotIndex > 0 ? normalized.slice(0, dotIndex) : normalized;
-  return `${stem}_white.png`;
-}
+const initialMessage: AgentMessage = {
+  id: "welcome",
+  role: "assistant",
+  text: "您好！我是金马珠宝的设计 AI Agent。您可以向我描述想要调整的图片处理任务，也可以上传草图、产品图或参考图。后续这里会接入专属 Agent 工作流，现在先作为对话入口使用。",
+};
 
-export function RemoveBackgroundPage({ assetItems }: RemoveBackgroundPageProps) {
-  const [files, setFiles] = useState<File[]>([]);
-  const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([]);
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [downloadName, setDownloadName] = useState("remove-background-white.png");
+export function RemoveBackgroundPage(_: { assetItems?: unknown }) {
+  const initialConversation = useMemo<AgentConversation>(
+    () => ({
+      id: "default",
+      title: "新对话",
+      updatedAt: new Date().toISOString(),
+      messages: [initialMessage],
+    }),
+    [],
+  );
+  const [conversations, setConversations] = useState<AgentConversation[]>([initialConversation]);
+  const [activeConversationId, setActiveConversationId] = useState(initialConversation.id);
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const uploadedPreviewUrl = useMemo(() => (files[0] ? URL.createObjectURL(files[0]) : null), [files]);
-  const sourcePreviewUrl = uploadedPreviewUrl ?? selectedAssets[0]?.previewUrl ?? selectedAssets[0]?.storageUrl ?? selectedAssets[0]?.fileUrl ?? null;
+  const activeConversation = conversations.find((item) => item.id === activeConversationId) ?? conversations[0] ?? initialConversation;
+  const messages = activeConversation.messages;
+  const attachmentNames = useMemo(() => attachments.map((file) => file.name), [attachments]);
 
-  useEffect(() => {
-    return () => {
-      if (uploadedPreviewUrl) URL.revokeObjectURL(uploadedPreviewUrl);
-    };
-  }, [uploadedPreviewUrl]);
-
-  useEffect(() => {
-    return () => {
-      if (resultUrl) URL.revokeObjectURL(resultUrl);
-    };
-  }, [resultUrl]);
-
-  async function handleRemoveBackground() {
-    if (processing) {
-      return;
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/"));
+    if (files.length) {
+      setAttachments((current) => [...current, ...files].slice(0, 6));
     }
-    setError(null);
-    setProcessing(true);
-    try {
-      const file = files[0] ?? (selectedAssets[0] ? await assetItemToFile(selectedAssets[0]) : null);
-      if (!file) {
-        throw new Error("请先选择一张待去背景图片。");
-      }
+    event.target.value = "";
+  }
 
-      if (resultUrl) URL.revokeObjectURL(resultUrl);
-      const whiteBlob = await submitRemoveBackground({ file });
-      if (!whiteBlob.size) {
-        throw new Error("去除背景完成，但没有返回有效图片，请稍后重试。");
-      }
+  function handleNewConversation() {
+    const nextConversation: AgentConversation = {
+      id: `${Date.now()}`,
+      title: "新对话",
+      updatedAt: new Date().toISOString(),
+      messages: [initialMessage],
+    };
+    setConversations((current) => [nextConversation, ...current]);
+    setActiveConversationId(nextConversation.id);
+    setDraft("");
+    setAttachments([]);
+  }
 
-      setResultUrl(URL.createObjectURL(whiteBlob));
-      setDownloadName(buildWhiteDownloadName(file.name));
-    } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "去除背景失败");
-    } finally {
-      setProcessing(false);
+  function handleSend() {
+    const text = draft.trim();
+    if (!text && attachments.length === 0) return;
+
+    const userMessage: AgentMessage = {
+      id: `${Date.now()}`,
+      role: "user",
+      text: text || "已上传参考图片。",
+      attachments: attachmentNames,
+    };
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === activeConversationId
+          ? {
+              ...conversation,
+              title: text ? text.slice(0, 24) : "图片处理对话",
+              updatedAt: new Date().toISOString(),
+              messages: [...conversation.messages, userMessage],
+            }
+          : conversation,
+      ),
+    );
+    setDraft("");
+    setAttachments([]);
+  }
+
+  function handleInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      handleSend();
     }
   }
 
   return (
-    <div className="page-stack compact-page split-page">
-      <FloatingToast message={error} />
-      <section className="panel compact-panel">
-        <div className="dashboard-grid result-heavy image-edit-layout">
-          <div className="form-card parameter-scroll-panel image-edit-form compact-parameter-panel">
-            <AssetSourcePicker
-              title="选择待去背景图片"
-              assetItems={assetItems}
-              uploadLabel="上传待处理图片"
-              onUploadFilesChange={setFiles}
-              onSelectedAssetsChange={setSelectedAssets}
-            />
-
-            <div className="hint-box remove-bg-hint-box">
-              该工具由服务器临时处理图片，不保存历史记录，也不会写入资产库。输出结果为白色背景图片，可直接下载使用。
-            </div>
-
-            <div className="inline-action-row">
-              <button className="primary-button align-start" type="button" onClick={handleRemoveBackground} disabled={processing || !sourcePreviewUrl}>
-                {processing ? "去背景中..." : "一键去背景"}
-              </button>
-              {resultUrl ? (
-                <a className="secondary-button compact-button" href={resultUrl} download={downloadName}>
-                  下载白底图
-                </a>
-              ) : null}
-            </div>
+    <div className="agent-chat-page">
+      <section className="agent-chat-shell">
+        <div className="agent-chat-body">
+          <div className="agent-chat-thread" aria-live="polite">
+            {messages.map((message) => (
+              <article className={message.role === "assistant" ? "agent-message assistant" : "agent-message user"} key={message.id}>
+                <div className="agent-avatar" aria-hidden="true">
+                  {message.role === "assistant" ? "AI" : "我"}
+                </div>
+                <div className="agent-message-content">
+                  <p>{message.text}</p>
+                  {message.attachments?.length ? (
+                    <div className="agent-attachment-list">
+                      {message.attachments.map((name) => (
+                        <span key={name}>{name}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </article>
+            ))}
           </div>
 
-          <div className="preview-history-layout">
-            <div className="stack-list preview-history-main">
-              <details className="drawer-panel" open>
-                <summary className="drawer-summary compact-drawer-summary">
-                  <div>
-                    <h4>结果预览</h4>
-                  </div>
-                  <span className="drawer-hint">展开 / 收起</span>
-                </summary>
-                <div className="drawer-content">
-                  <div className="result-preview-pane result-preview-pane-single">
-                    <span>白底结果</span>
-                    <div
-                      className={resultUrl ? "generated-result-card compare image-edit-result-card interactive-result-card remove-bg-result-card" : "generated-result-card compare image-edit-result-card remove-bg-result-card"}
-                      role={resultUrl ? "button" : undefined}
-                      tabIndex={resultUrl ? 0 : undefined}
-                      onClick={resultUrl ? () => setPreviewOpen(true) : undefined}
-                    >
-                      {resultUrl ? (
-                        <div className="remove-bg-preview-surface">
-                          <img className="generated-image image-fit-contain interactive-preview-image" src={resultUrl} alt="去背景结果" />
-                        </div>
-                      ) : (
-                        <div className="remove-bg-empty-state">
-                          <p>上传或选择一张图片后，可由服务器临时去除背景并返回白底图。</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+          <div className="agent-composer-wrap">
+            {attachments.length ? (
+              <div className="agent-composer-files">
+                {attachments.map((file) => (
+                  <span key={`${file.name}-${file.lastModified}`}>{file.name}</span>
+                ))}
+              </div>
+            ) : null}
+            <div className="agent-composer">
+              <textarea
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleInputKeyDown}
+                placeholder="输入消息，或上传图片..."
+                rows={3}
+              />
+              <div className="agent-composer-toolbar">
+                <div className="agent-composer-tools">
+                  <button type="button" onClick={() => fileInputRef.current?.click()} aria-label="上传图片" title="上传图片">
+                    <span className="agent-tool-image" aria-hidden="true" />
+                  </button>
+                  <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileChange} />
                 </div>
-              </details>
+                <div className="agent-send-row">
+                  <span>Enter 发送 / Shift+Enter 换行</span>
+                  <button className="agent-send-button" type="button" onClick={handleSend} disabled={!draft.trim() && attachments.length === 0}>
+                    <span aria-hidden="true">➤</span>
+                    发送
+                  </button>
+                </div>
+              </div>
             </div>
+            {/* <p className="agent-chat-disclaimer">AI 生成的内容仅供参考，请注意甄别并结合实际工艺规范。</p> */}
           </div>
         </div>
       </section>
+      <aside className={historyCollapsed ? "agent-history-column collapsed" : "agent-history-column"}>
+        {!historyCollapsed ? (
+          <button className="page-history-toggle-button agent-new-chat-button" type="button" onClick={handleNewConversation}>
+            新对话
+          </button>
+        ) : null}
 
-      {previewOpen && resultUrl ? (
-        <ResultPreviewModal title="去除背景预览" sourceUrl={sourcePreviewUrl} sourceLabel="原始图" resultUrl={resultUrl} resultLabel="白底结果" onClose={() => setPreviewOpen(false)} />
-      ) : null}
+        <div className={historyCollapsed ? "page-history-sidebar agent-history-sidebar collapsed" : "page-history-sidebar agent-history-sidebar"}>
+          <div className="page-history-sidebar-header">
+            {!historyCollapsed ? (
+              <>
+                <div className="stack-list compact-stack">
+                  <h4>对话历史</h4>
+                </div>
+                <button
+                  className="page-history-toggle-button"
+                  type="button"
+                  onClick={() => setHistoryCollapsed(true)}
+                  aria-label="收起对话历史"
+                  title="收起对话历史"
+                >
+                  <span className="page-history-toggle-icon" aria-hidden="true">
+                    {"<"}
+                  </span>
+                  <span>收起</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="page-history-sidebar-mini-title">对话</span>
+                <button
+                  className="page-history-toggle-button collapsed"
+                  type="button"
+                  onClick={() => setHistoryCollapsed(false)}
+                  aria-label="展开对话历史"
+                  title="展开对话历史"
+                >
+                  <span className="page-history-toggle-icon" aria-hidden="true">
+                    {">"}
+                  </span>
+                </button>
+              </>
+            )}
+          </div>
+          <div className="page-history-sidebar-body">
+            <div className="page-history-sidebar-list">
+              {conversations.map((conversation) => (
+                <article className={conversation.id === activeConversationId ? "page-history-card agent-history-card active" : "page-history-card agent-history-card"} key={conversation.id}>
+                  <button className="page-history-card-button" type="button" onClick={() => setActiveConversationId(conversation.id)}>
+                    {!historyCollapsed ? (
+                      <>
+                      <div className="history-inline-head history-entry-head">
+                        <h4>{conversation.title}</h4>
+                      </div>
+                      <div className="history-meta-row">
+                        <span className="history-time-pill">{new Date(conversation.updatedAt).toLocaleString()}</span>
+                        <p className="muted">{Math.max(0, conversation.messages.length - 1)} 条消息</p>
+                      </div>
+                      </>
+                    ) : (
+                      <span className="agent-history-mini-dot" aria-hidden="true" />
+                    )}
+                  </button>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }

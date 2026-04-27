@@ -208,24 +208,30 @@ export function AssetSourcePicker({
       </div>
 
       {includeUploadOption ? (
-        <div className="source-segmented">
-          <button
-            type="button"
-            className={sourceType === "upload" ? "source-mode-button active" : "source-mode-button"}
-            onClick={() => setSourceType("upload")}
-          >
-            <strong>本地上传</strong>
-            <span>{allowMultiple ? "上传多张图片" : "上传单张图片"}</span>
-          </button>
-          <button
-            type="button"
-            className={sourceType === "asset" ? "source-mode-button active" : "source-mode-button"}
-            onClick={() => setSourceType("asset")}
-          >
-            <strong>基于资产</strong>
-            <span>从资产库选择</span>
-          </button>
-        </div>
+        <>
+          <div className="source-segmented">
+            <button
+              type="button"
+              className={sourceType === "upload" ? "source-mode-button active" : "source-mode-button"}
+              onClick={() => setSourceType("upload")}
+            >
+              <strong>本地上传</strong>
+              <span>{allowMultiple ? "上传多张图片" : "上传单张图片"}</span>
+            </button>
+            <button
+              type="button"
+              className={sourceType === "asset" ? "source-mode-button active" : "source-mode-button"}
+              onClick={() => setSourceType("asset")}
+            >
+              <strong>基于资产</strong>
+              <span>从资产库选择</span>
+            </button>
+          </div>
+          <div className="source-asset-helper">
+            <p>基于资产可直接选择历史生成的结果图，或已上传到过的图片。</p>
+            <p>以上可以避免多次上传相同的图片，导致资产库出现大量相同图片。</p>
+          </div>
+        </>
       ) : null}
 
       {sourceType === "upload" ? (

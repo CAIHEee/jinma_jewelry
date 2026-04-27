@@ -4,11 +4,12 @@ interface LoginPageProps {
   error: string | null;
   onLogin: (username: string, password: string) => Promise<void>;
   onRegister: (payload: { username: string; password: string; displayName?: string }) => Promise<void>;
+  onClearError?: () => void;
 }
 
 type AuthMode = "login" | "register";
 
-export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
+export function LoginPage({ error, onLogin, onRegister, onClearError }: LoginPageProps) {
   const [mode, setMode] = useState<AuthMode>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -77,6 +78,11 @@ export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
     }
   }
 
+  function clearErrors() {
+    if (localError) setLocalError(null);
+    if (error) onClearError?.();
+  }
+
   return (
     <main className="workspace login-shell">
       <div className="login-backdrop" aria-hidden="true">
@@ -107,7 +113,7 @@ export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
                 value={username}
                 onChange={(event) => {
                   setUsername(event.target.value);
-                  if (localError) setLocalError(null);
+                  clearErrors();
                 }}
                 placeholder={mode === "login" ? "请输入用户名" : "注册后用于登录"}
                 autoComplete="username"
@@ -122,7 +128,7 @@ export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
                   value={displayName}
                   onChange={(event) => {
                     setDisplayName(event.target.value);
-                    if (localError) setLocalError(null);
+                    clearErrors();
                   }}
                   placeholder="选填，用于页面展示"
                   autoComplete="nickname"
@@ -138,7 +144,7 @@ export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
                 value={password}
                 onChange={(event) => {
                   setPassword(event.target.value);
-                  if (localError) setLocalError(null);
+                  clearErrors();
                 }}
                 placeholder={mode === "login" ? "请输入密码" : "至少 6 位"}
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
@@ -153,7 +159,7 @@ export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
                   value={confirmPassword}
                   onChange={(event) => {
                     setConfirmPassword(event.target.value);
-                    if (localError) setLocalError(null);
+                    clearErrors();
                   }}
                   placeholder="请再次输入密码"
                   autoComplete="new-password"
@@ -174,6 +180,7 @@ export function LoginPage({ error, onLogin, onRegister }: LoginPageProps) {
                   const nextMode = mode === "login" ? "register" : "login";
                   setMode(nextMode);
                   setLocalError(null);
+                  onClearError?.();
                   if (nextMode === "register" && username === "root") {
                     setUsername("");
                   }

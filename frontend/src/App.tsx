@@ -276,6 +276,7 @@ function hasViewPermission(user: CurrentUser, view: AppView) {
 function firstAvailableView(user: CurrentUser): AppView {
   const ordered: AppView[] = [
     "asset-management",
+    "remove-background",
     "text-to-image",
     "fusion",
     "image-edit",
@@ -284,7 +285,6 @@ function firstAvailableView(user: CurrentUser): AppView {
     "upscale",
     "multi-view",
     "grayscale-relief",
-    "remove-background",
     "multi-view-split",
     "history",
     "admin",
@@ -543,7 +543,7 @@ export default function App() {
       fusion: "多图融合",
       history: "历史记录",
       "grayscale-relief": "转灰度图",
-      "remove-background": "去除背景",
+      "remove-background": "AI Agent",
       "asset-management": "资产管理",
       admin: "系统管理",
     };
@@ -580,7 +580,7 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <LoginPage error={authError} onLogin={handleLogin} onRegister={handleRegister} />;
+    return <LoginPage error={authError} onLogin={handleLogin} onRegister={handleRegister} onClearError={() => setAuthError(null)} />;
   }
 
   return (

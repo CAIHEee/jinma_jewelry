@@ -17,13 +17,14 @@ import type { ModuleHistoryEntry } from "../utils/history";
 const templates = getPromptTemplatesByModule("grayscale-relief");
 const defaultPrompt =
   templates[0]?.content ??
-  "严格保留参考图的结构、比例与雕塑细节，将其渲染为哑光灰度泥模效果，不要金属反光与宝石折射，仅保留轻微 AO 阴影。";
+  "严格遵循参考图像：保持精确的3D结构、比例、透视以及所有雕塑细节。形式上不得有任何偏差，不得添加任何元素。渲染为纯黏土模型：单色调哑光灰色材质，无金属反射，无宝石折射，无抛光。仅使用微妙的灰度着色来传达形态。照明：仅使用柔和的环境光遮挡（AO），最小程度的平行光，无刺眼的阴影，无镜面高光。细节必须保持清晰——每个纹理、雕刻和结构边缘都要完全保留。背景为深哑光黑色，拓扑风格简洁呈现。无后期处理，无珠宝风格渲染，无逼真效果。";
 const progressPhases = [
   { at: 18, label: "提取结构轮廓..." },
   { at: 42, label: "提交灰度转换请求..." },
   { at: 76, label: "生成灰阶泥模质感..." },
   { at: 95, label: "整理灰度结果..." },
 ];
+const preferredGrayscaleModelId = "gpt-image-2-aiapis";
 const jobProgressLabels = {
   queued: "灰度转换任务排队中...",
   running: "生成灰阶泥模质感...",
@@ -41,7 +42,11 @@ interface GrayscaleReliefPageProps {
 
 export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDeleteHistory }: GrayscaleReliefPageProps) {
   const { models, error: modelError, defaultModelId } = useModelCatalog((model) => model.supports_reference_images);
-  const [model, setModel] = useState(defaultModelId);
+  const grayscaleDefaultModelId = useMemo(
+    () => models.find((item) => item.id === preferredGrayscaleModelId)?.id ?? defaultModelId,
+    [defaultModelId, models],
+  );
+  const [model, setModel] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<AssetItem[]>([]);
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -57,9 +62,9 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
       return;
     }
     if (!model || !models.some((item) => item.id === model)) {
-      setModel(defaultModelId);
+      setModel(grayscaleDefaultModelId);
     }
-  }, [defaultModelId, model, models]);
+  }, [grayscaleDefaultModelId, model, models]);
 
   useEffect(() => {
     if (result || selectedHistoryId || pageRuns.length === 0) {
@@ -158,14 +163,6 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy image-edit-layout">
           <div className="form-card parameter-scroll-panel image-edit-form compact-parameter-panel">
-            <AssetSourcePicker
-              title="选择灰度图来源"
-              assetItems={assetItems}
-              uploadLabel="上传参考图"
-              onUploadFilesChange={setFiles}
-              onSelectedAssetsChange={setSelectedAssets}
-            />
-
             <label className="input-group compact-input-group">
               <span>模型</span>
               <select value={model} onChange={(event) => setModel(event.target.value)} disabled={models.length === 0}>
@@ -177,6 +174,14 @@ export function GrayscaleReliefPage({ assetItems, onRecordRun, pageRuns, onDelet
               </select>
               {modelError ? <small>{modelError}</small> : null}
             </label>
+
+            <AssetSourcePicker
+              title="选择灰度图来源"
+              assetItems={assetItems}
+              uploadLabel="上传参考图"
+              onUploadFilesChange={setFiles}
+              onSelectedAssetsChange={setSelectedAssets}
+            />
 
             <GenerationProgress
               state={progressState}

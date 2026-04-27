@@ -10,9 +10,6 @@ const progressPhases = [
   { at: 95, label: "整理裸石结果..." },
 ];
 
-const defaultPrompt =
-  "以参考图内全部裸石为基础进行合理的人工珠宝设计，不改变任何裸石的形状、大小比例，采用精致金属材质进行镶嵌与装饰，对每颗裸石进行美学化、对称化布局，设计结构合理，不得添加其它参考图以外的玉石、细节完整、光影精致的珠宝成品设计图。";
-
 interface GemstoneDesignPageProps {
   assetItems: AssetItem[];
   onRecordRun: (run: Omit<WorkspaceRun, "id" | "createdAt">) => void;
@@ -41,7 +38,7 @@ export function GemstoneDesignPage(props: GemstoneDesignPageProps) {
       historyKind="gemstone_design"
       endpointPath="/ai/gemstone-design"
       allowMultipleSources
-      defaultPrompt={defaultPrompt}
+      defaultPrompt=""
       progressPhases={progressPhases}
       successLabel="裸石方案已完成"
       errorProgressLabel="裸石设计失败"

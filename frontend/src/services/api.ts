@@ -149,6 +149,18 @@ function normalizeKnownApiError(payload: unknown): string | null {
   if (typeof detail === "string" && (detail.includes("Authentication required") || detail.includes("Unauthorized"))) {
     return "当前登录状态已失效，请重新登录后再试。";
   }
+  if (typeof detail === "string" && detail.includes("Invalid username or password")) {
+    return "用户名或密码错误，请检查后重试。";
+  }
+  if (typeof detail === "string" && detail.includes("User is disabled")) {
+    return "该账号已被禁用，请联系管理员。";
+  }
+  if (typeof detail === "string" && detail.includes("User is deleted")) {
+    return "该账号已被删除，请联系管理员。";
+  }
+  if (typeof detail === "string" && detail.includes("Username already exists")) {
+    return "该用户名已存在，请换一个用户名。";
+  }
   if (typeof detail === "string" && (detail.includes("SSLV3_ALERT_HANDSHAKE_FAILURE") || detail.includes("handshake failure"))) {
     return "当前所选 AI 服务连接异常，请稍后重试，或切换其他中转。";
   }

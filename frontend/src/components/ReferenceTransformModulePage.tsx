@@ -228,15 +228,6 @@ export function ReferenceTransformModulePage({
       <section className="panel compact-panel">
         <div className="dashboard-grid result-heavy image-edit-layout">
           <div className="form-card parameter-scroll-panel image-edit-form compact-parameter-panel">
-            <AssetSourcePicker
-              title={sourcePickerTitle}
-              assetItems={assetItems}
-              allowMultiple={allowMultipleSources}
-              uploadLabel={uploadLabel}
-              onUploadFilesChange={setFiles}
-              onSelectedAssetsChange={setSelectedAssets}
-            />
-
             {!hideModelSelector ? (
               <label className="input-group compact-input-group">
                 <span>模型</span>
@@ -250,6 +241,15 @@ export function ReferenceTransformModulePage({
                 {modelError ? <small>{modelError}</small> : null}
               </label>
             ) : null}
+
+            <AssetSourcePicker
+              title={sourcePickerTitle}
+              assetItems={assetItems}
+              allowMultiple={allowMultipleSources}
+              uploadLabel={uploadLabel}
+              onUploadFilesChange={setFiles}
+              onSelectedAssetsChange={setSelectedAssets}
+            />
 
             {!hidePromptEditor ? (
               <label className="input-group prompt-input-group compact-prompt-group">

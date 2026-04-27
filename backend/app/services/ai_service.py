@@ -66,17 +66,6 @@ MODEL_CATALOG: dict[str, TTAPIModelConfig] = {
         supports_reference_images=True,
         pricing_hint="GPT Image 2 generation via AIAPIS relay",
     ),
-    "gpt-image-2-wuyin": TTAPIModelConfig(
-        id="gpt-image-2-wuyin",
-        label="五音 · GPT Image 2",
-        provider=ProviderType.wuyin,
-        category="image_generation",
-        upstream_model_id="gpt-image-2",
-        supports_text_to_image=True,
-        supports_multi_image_fusion=True,
-        supports_reference_images=True,
-        pricing_hint="GPT Image 2 generation via Wuyin relay",
-    ),
     "gpt-image-2-dmxapi": TTAPIModelConfig(
         id="gpt-image-2-dmxapi",
         label="DMXAPI · GPT Image 2",
